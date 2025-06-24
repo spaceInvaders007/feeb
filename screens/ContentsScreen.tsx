@@ -17,10 +17,14 @@ export default function ContentsScreen() {
   const navigation = useNavigation<any>();
 
   const [videoStarted, setVideoStarted] = useState(false);
+  const [thumbnailError, setThumbnailError] = useState(false);
 
   const videoUri = "https://samplelib.com/lib/preview/mp4/sample-5s.mp4";
 
-const thumbnailUri = 'https://via.placeholder.com/640x360.png?text=Sample+Video';
+  // Better thumbnail URLs that are more reliable
+  const thumbnailUri = thumbnailError 
+    ? 'https://picsum.photos/640/360' // Fallback to Lorem Picsum
+    : 'https://images.unsplash.com/photo-1611162617474-5b21e879e113?w=640&h=360&fit=crop'; // Unsplash video thumbnail
 
   return (
     <View style={styles.container}>
@@ -28,7 +32,7 @@ const thumbnailUri = 'https://via.placeholder.com/640x360.png?text=Sample+Video'
       <View style={styles.card}>
         <View style={styles.userRow}>
           <Image
-            source={{ uri: "https://placekitten.com/100/100" }}
+            source={{ uri: "https://picsum.photos/100/100?random=1" }}
             style={styles.avatar}
           />
           <View>
@@ -55,13 +59,28 @@ const thumbnailUri = 'https://via.placeholder.com/640x360.png?text=Sample+Video'
               shouldPlay
             />
           ) : (
-            <>
-              <Image source={{ uri: thumbnailUri }} style={styles.thumbnail} />
+            <View style={styles.thumbnailContainer}>
+              {/* Thumbnail image */}
+              <Image 
+                source={{ uri: thumbnailUri }} 
+                style={styles.thumbnail}
+                onError={() => {
+                  console.log('Thumbnail failed to load, trying fallback');
+                  setThumbnailError(true);
+                }}
+                onLoad={() => {
+                  console.log('Thumbnail loaded successfully');
+                }}
+              />
+              
+              {/* Overlay with play button */}
               <View style={styles.feebOverlay}>
-                <Ionicons name="videocam" size={36} color="white" />
+                <View style={styles.playButton}>
+                  <Ionicons name="videocam" size={36} color="white" />
+                </View>
                 <Text style={styles.feebText}>Tap to Feeb it</Text>
               </View>
-            </>
+            </View>
           )}
         </TouchableOpacity>
 
@@ -72,7 +91,7 @@ const thumbnailUri = 'https://via.placeholder.com/640x360.png?text=Sample+Video'
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 16 },
+  container: { flex: 1, padding: 16, backgroundColor: "#fff" },
   header: { fontSize: 22, fontWeight: "700", marginBottom: 16 },
   card: { marginBottom: 24 },
   userRow: {
@@ -91,12 +110,17 @@ const styles = StyleSheet.create({
     aspectRatio: 16 / 9,
     borderRadius: 12,
     overflow: "hidden",
-    backgroundColor: "#000",
+    backgroundColor: "#f0f0f0", // Light gray background as fallback
+    position: "relative",
   },
   video: {
     width: "100%",
     height: "100%",
-    resizeMode: ResizeMode.CONTAIN, // already correct
+  },
+  thumbnailContainer: {
+    width: "100%",
+    height: "100%",
+    position: "relative",
   },
   thumbnail: {
     width: "100%",
@@ -105,16 +129,30 @@ const styles = StyleSheet.create({
   },
   feebOverlay: {
     position: "absolute",
-    top: "35%",
-    left: "30%",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     alignItems: "center",
     justifyContent: "center",
+    backgroundColor: "rgba(0, 0, 0, 0.3)", // Semi-transparent overlay
+  },
+  playButton: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: "rgba(0, 207, 255, 0.9)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 12,
   },
   feebText: {
-    marginTop: 10,
     fontSize: 16,
     fontWeight: "600",
     color: "white",
+    textShadowColor: "rgba(0, 0, 0, 0.7)",
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 3,
   },
   caption: { marginTop: 8, fontSize: 14, color: "#444" },
 });
