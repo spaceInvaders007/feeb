@@ -1,6 +1,4 @@
-// screens/ProfileScreen.tsx
-
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -9,15 +7,20 @@ import {
   TouchableOpacity,
   Dimensions,
   FlatList,
+  Alert,
+  Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { VideoView, useVideoPlayer } from 'expo-video';
+import { useFocusEffect } from "@react-navigation/native";
+import { FeebStorage, Feeb } from "../utils/FeebStorage";
 
 const screenWidth = Dimensions.get("window").width;
 const SPACING = 8;
 const COLUMN_COUNT = 2;
 const ITEM_SIZE = (screenWidth - SPACING * (COLUMN_COUNT + 1)) / COLUMN_COUNT;
 
-// replace this with your real user/avatar data
+// User data (in real app, this would come from auth/user context)
 const user = {
   avatarUri: "https://randomuser.me/api/portraits/women/44.jpg",
   name: "Lindsey Horan",
@@ -27,32 +30,259 @@ const user = {
   likes: "12.3k",
 };
 
-// dummy grid data
-const sampleFeebs = [
-  { id: "f1", uri: "https://placekitten.com/300/300" },
-  { id: "f2", uri: "https://placekitten.com/301/301" },
-  { id: "f3", uri: "https://placekitten.com/302/302" },
-  { id: "f4", uri: "https://placekitten.com/303/303" },
-];
-const sampleContents = [
+// Sample content data (different structure from Feeb)
+interface ContentItem {
+  id: string;
+  uri: string;
+}
+
+const sampleContents: ContentItem[] = [
   { id: "c1", uri: "https://placekitten.com/304/304" },
   { id: "c2", uri: "https://placekitten.com/305/305" },
   { id: "c3", uri: "https://placekitten.com/306/306" },
   { id: "c4", uri: "https://placekitten.com/307/307" },
 ];
 
+interface FeebItemState {
+  id: string;
+  displayUri: string;
+  loading: boolean;
+  error: boolean;
+}
+
 export default function ProfileScreen() {
   const [activeTab, setActiveTab] = useState<"Feebs" | "Contents">("Feebs");
-  const data = activeTab === "Feebs" ? sampleFeebs : sampleContents;
+  const [userFeebs, setUserFeebs] = useState<Feeb[]>([]);
+  const [feebDisplayStates, setFeebDisplayStates] = useState<FeebItemState[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Load feebs when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      loadUserFeebs();
+    }, [])
+  );
+
+  const loadUserFeebs = async () => {
+    try {
+      setLoading(true);
+      const feebs = await FeebStorage.getAllFeebs();
+      setUserFeebs(feebs);
+      console.log(`📱 Loaded ${feebs.length} feebs from storage`);
+      
+      // Load display URIs for web feebs
+      await loadFeebDisplayUris(feebs);
+    } catch (error) {
+      console.error("Error loading feebs:", error);
+      Alert.alert("Error", "Failed to load your feebs");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadFeebDisplayUris = async (feebs: Feeb[]) => {
+    console.log('🖼️ Loading display URIs for feebs...');
+    
+    const displayStates: FeebItemState[] = await Promise.all(
+      feebs.map(async (feeb) => {
+        const state: FeebItemState = {
+          id: feeb.id,
+          displayUri: feeb.uri,
+          loading: false,
+          error: false
+        };
+
+        try {
+          if (Platform.OS === 'web' && feeb.isWebBlob) {
+            console.log(`🔍 Loading display URI for web feeb: ${feeb.id}`);
+            state.loading = true;
+            
+            const displayUri = await FeebStorage.getFeebDisplayUri(feeb);
+            state.loading = false;
+            
+            if (displayUri && displayUri.length > 0) {
+              state.displayUri = displayUri;
+              console.log(`✅ Display URI loaded for ${feeb.id}: Success`);
+            } else {
+              console.log(`❌ Display URI failed for ${feeb.id}: Empty or invalid`);
+              state.error = true;
+              state.displayUri = '';
+            }
+          }
+        } catch (error) {
+          console.error(`❌ Error loading display URI for feeb ${feeb.id}:`, error);
+          state.error = true;
+          state.loading = false;
+          state.displayUri = '';
+        }
+
+        return state;
+      })
+    );
+
+    setFeebDisplayStates(displayStates);
+  };
+
+  const getFeebDisplayState = (feebId: string): FeebItemState | undefined => {
+    return feebDisplayStates.find(state => state.id === feebId);
+  };
+
+  const handleDeleteFeeb = async (feebId: string) => {
+    Alert.alert(
+      "Delete Feeb",
+      "Are you sure you want to delete this feeb?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await FeebStorage.deleteFeeb(feebId);
+              await loadUserFeebs(); // Reload the list
+              Alert.alert("Success", "Feeb deleted successfully");
+            } catch (error) {
+              console.error("Error deleting feeb:", error);
+              Alert.alert("Error", "Failed to delete feeb");
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleCleanupInvalidFeebs = async () => {
+    Alert.alert(
+      "Clean Up Invalid Videos",
+      "This will remove feebs that can no longer be displayed. Continue?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Clean Up",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              const invalidFeebIds = feebDisplayStates
+                .filter(state => state.error)
+                .map(state => state.id);
+              
+              for (const feebId of invalidFeebIds) {
+                await FeebStorage.deleteFeeb(feebId);
+              }
+              
+              await loadUserFeebs(); // Reload the list
+              Alert.alert("Success", `Cleaned up ${invalidFeebIds.length} invalid feebs`);
+            } catch (error) {
+              console.error("Error cleaning up feebs:", error);
+              Alert.alert("Error", "Failed to clean up feebs");
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const renderFeebItem = ({ item }: { item: Feeb }) => {
+    const displayState = getFeebDisplayState(item.id);
+    const isWebVideo = Platform.OS === 'web' && item.isWebBlob;
+    
+    // Show loading state for web videos that are still loading
+    if (isWebVideo && displayState?.loading) {
+      return (
+        <View style={[styles.gridItem, styles.loadingItem]}>
+          <Text style={styles.loadingText}>Loading...</Text>
+        </View>
+      );
+    }
+
+    // Show error state for failed loads
+    if (displayState?.error) {
+      return (
+        <TouchableOpacity 
+          style={[styles.gridItem, styles.errorItem]}
+          onPress={() => handleDeleteFeeb(item.id)}
+          onLongPress={() => handleDeleteFeeb(item.id)}
+        >
+          <Ionicons name="warning" size={24} color="#ff6b6b" />
+          <Text style={styles.errorText}>Invalid Video</Text>
+          <Text style={styles.errorSubtext}>Tap to delete</Text>
+        </TouchableOpacity>
+      );
+    }
+
+    const displayUri = displayState?.displayUri || item.uri;
+
+    return (
+      <TouchableOpacity 
+        style={styles.gridItem}
+        onLongPress={() => handleDeleteFeeb(item.id)}
+      >
+        {isWebVideo && displayUri.startsWith('data:') ? (
+          // For web data URLs, use video element directly
+          <video
+            src={displayUri}
+            style={styles.gridVideoWeb as any}
+            muted
+            loop
+            onMouseEnter={(e) => {
+              const video = e.target as HTMLVideoElement;
+              video.currentTime = 0;
+              video.play().catch(console.log);
+            }}
+            onMouseLeave={(e) => {
+              const video = e.target as HTMLVideoElement;
+              video.pause();
+            }}
+            onError={(e) => {
+              console.error('Video element error for feeb:', item.id, e);
+            }}
+          />
+        ) : (
+          // For mobile or regular URIs, use VideoView component
+          <FeebVideoView uri={displayUri} feebId={item.id} />
+        )}
+        <View style={styles.feebOverlay}>
+          <Ionicons name="videocam" size={20} color="white" />
+        </View>
+        <View style={styles.feebInfo}>
+          <Text style={styles.feebDate}>
+            {new Date(item.createdAt).toLocaleDateString()}
+          </Text>
+          {isWebVideo && (
+            <Text style={styles.feebPlatform}>Web</Text>
+          )}
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
+  const renderContentItem = ({ item }: { item: ContentItem }) => (
+    <View style={styles.gridItem}>
+      <Image 
+        source={{ uri: item.uri }} 
+        style={styles.gridImage}
+        resizeMode="cover"
+      />
+      <View style={styles.playIcon}>
+        <Ionicons name="play-circle" size={24} color="white" />
+      </View>
+    </View>
+  );
 
   const renderHeader = () => (
     <View style={styles.headerContainer}>
       <Text style={styles.title}>My profile</Text>
-      {/* YOUR AVATAR */}
-      <Image source={{ uri: user.avatarUri }} style={styles.avatar} />
+      
+      {/* User Avatar */}
+      <Image 
+        source={{ uri: user.avatarUri }} 
+        style={styles.avatar}
+        resizeMode="cover"
+      />
       <Text style={styles.name}>{user.name}</Text>
       <Text style={styles.handle}>{user.handle}</Text>
 
+      {/* Stats Row */}
       <View style={styles.statsRow}>
         <View style={styles.stat}>
           <Text style={styles.statValue}>{user.followers}</Text>
@@ -63,16 +293,26 @@ export default function ProfileScreen() {
           <Text style={styles.statLabel}>Following</Text>
         </View>
         <View style={styles.stat}>
-          <Text style={styles.statValue}>{user.likes}</Text>
-          <Text style={styles.statLabel}>Likes</Text>
+          <Text style={styles.statValue}>{userFeebs.length}</Text>
+          <Text style={styles.statLabel}>Feebs</Text>
         </View>
       </View>
 
+      {/* Edit Button */}
       <TouchableOpacity style={styles.editButton}>
         <Text style={styles.editButtonText}>Edit profile</Text>
         <Ionicons name="pencil" size={20} color="#00CFFF" />
       </TouchableOpacity>
 
+      {/* Cleanup button for invalid feebs */}
+      {Platform.OS === 'web' && feebDisplayStates.some(state => state.error) && (
+        <TouchableOpacity style={styles.cleanupButton} onPress={handleCleanupInvalidFeebs}>
+          <Text style={styles.cleanupButtonText}>Clean up invalid videos</Text>
+          <Ionicons name="trash" size={16} color="#ff6b6b" />
+        </TouchableOpacity>
+      )}
+
+      {/* Tab Row */}
       <View style={styles.tabRow}>
         {(["Feebs", "Contents"] as const).map((tab) => (
           <TouchableOpacity
@@ -86,11 +326,13 @@ export default function ProfileScreen() {
                 activeTab === tab && styles.tabTextActive,
               ]}
             >
-              {tab}
+              {tab} {tab === "Feebs" && `(${userFeebs.length})`}
             </Text>
           </TouchableOpacity>
         ))}
       </View>
+      
+      {/* Divider */}
       <View style={styles.dividerRow}>
         <View
           style={[
@@ -108,22 +350,66 @@ export default function ProfileScreen() {
     </View>
   );
 
+  const renderEmptyState = () => (
+    <View style={styles.emptyState}>
+      <Ionicons name="videocam-outline" size={64} color="#ccc" />
+      <Text style={styles.emptyTitle}>No feebs yet</Text>
+      <Text style={styles.emptySubtitle}>
+        Record your first reaction to get started!
+      </Text>
+    </View>
+  );
+
+  if (loading && activeTab === "Feebs") {
+    return (
+      <View style={styles.loadingContainer}>
+        <Text>Loading your feebs...</Text>
+      </View>
+    );
+  }
+
   return (
-    <FlatList
-      data={data}
-      keyExtractor={(item) => item.id}
-      numColumns={COLUMN_COUNT}
-      showsVerticalScrollIndicator={false}
-      contentContainerStyle={styles.listContent}
-      ListHeaderComponent={renderHeader}
-      renderItem={({ item }) => (
-        <View style={styles.gridItem}>
-          <Image source={{ uri: item.uri }} style={styles.gridImage} />
-          <View style={styles.playIcon}>
-            <Ionicons name="play-circle" size={24} color="white" />
-          </View>
-        </View>
+    <>
+      {activeTab === "Feebs" ? (
+        <FlatList
+          data={userFeebs}
+          keyExtractor={(item) => item.id}
+          numColumns={COLUMN_COUNT}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.listContent}
+          ListHeaderComponent={renderHeader}
+          ListEmptyComponent={renderEmptyState}
+          renderItem={renderFeebItem}
+        />
+      ) : (
+        <FlatList
+          data={sampleContents}
+          keyExtractor={(item) => item.id}
+          numColumns={COLUMN_COUNT}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.listContent}
+          ListHeaderComponent={renderHeader}
+          renderItem={renderContentItem}
+        />
       )}
+    </>
+  );
+}
+
+// Separate component for feeb videos to handle video player properly
+function FeebVideoView({ uri, feebId }: { uri: string; feebId: string }) {
+  const player = useVideoPlayer(uri, (player) => {
+    player.loop = false;
+    player.muted = true;
+  });
+
+  return (
+    <VideoView
+      style={styles.gridVideo}
+      player={player}
+      allowsFullscreen={false}
+      allowsPictureInPicture={false}
+      showsTimecodes={false}
     />
   );
 }
@@ -201,6 +487,8 @@ const styles = StyleSheet.create({
   },
   divider: { flex: 1, backgroundColor: "transparent" },
   dividerActive: { backgroundColor: "#000" },
+  
+  // Grid items
   gridItem: {
     width: ITEM_SIZE,
     height: ITEM_SIZE,
@@ -208,15 +496,130 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     overflow: "hidden",
     backgroundColor: "#000",
+    position: "relative",
   },
   gridImage: {
     width: "100%",
     height: "100%",
-    resizeMode: "cover",
+  },
+  gridVideo: {
+    width: "100%",
+    height: "100%",
+  },
+  gridVideoWeb: {
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
   },
   playIcon: {
     position: "absolute",
     top: 8,
     right: 8,
+  },
+  feebOverlay: {
+    position: "absolute",
+    top: 8,
+    left: 8,
+    backgroundColor: "rgba(0, 207, 255, 0.8)",
+    borderRadius: 12,
+    padding: 4,
+  },
+  feebInfo: {
+    position: "absolute",
+    bottom: 4,
+    left: 4,
+    right: 4,
+  },
+  feebDate: {
+    color: "white",
+    fontSize: 10,
+    textShadowColor: "rgba(0, 0, 0, 0.7)",
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
+  },
+  feebPlatform: {
+    color: "white",
+    fontSize: 8,
+    opacity: 0.8,
+    textShadowColor: "rgba(0, 0, 0, 0.7)",
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
+  },
+  
+  // Loading and error states
+  loadingItem: {
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#f0f0f0",
+  },
+  loadingText: {
+    color: "#666",
+    fontSize: 12,
+  },
+  errorItem: {
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#ffebee",
+  },
+  errorText: {
+    color: "#d32f2f",
+    fontSize: 10,
+    marginTop: 4,
+    textAlign: "center",
+    fontWeight: "bold",
+  },
+  errorSubtext: {
+    color: "#d32f2f",
+    fontSize: 8,
+    marginTop: 2,
+    textAlign: "center",
+    opacity: 0.8,
+  },
+  
+  // Cleanup button
+  cleanupButton: {
+    flexDirection: "row",
+    alignSelf: "center",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#ff6b6b",
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    marginBottom: SPACING,
+  },
+  cleanupButtonText: {
+    color: "#ff6b6b",
+    fontSize: 12,
+    fontWeight: "600",
+    marginRight: 6,
+  },
+  
+  // Empty state
+  emptyState: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 40,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#666",
+    marginTop: 16,
+  },
+  emptySubtitle: {
+    fontSize: 14,
+    color: "#aaa",
+    textAlign: "center",
+    marginTop: 8,
+    paddingHorizontal: 32,
+  },
+  
+  // Loading state
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#fff",
   },
 });

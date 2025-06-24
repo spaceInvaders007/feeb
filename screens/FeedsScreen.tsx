@@ -1,4 +1,3 @@
-// screens/FeedsScreen.tsx
 import React from 'react';
 import { View, Text, StyleSheet, Image, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -11,6 +10,7 @@ export default function FeedsScreen() {
         <Image
           source={{ uri: 'https://placekitten.com/400/300' }}
           style={styles.cameraImage}
+          resizeMode="cover"
         />
         <TouchableOpacity style={styles.muteBtn}>
           <Ionicons name="volume-mute" size={20} color="#fff" />
@@ -24,6 +24,7 @@ export default function FeedsScreen() {
             uri: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde',
           }}
           style={styles.videoImage}
+          resizeMode="cover"
         />
         <TouchableOpacity style={[styles.muteBtn, { top: 10 }]}>
           <Ionicons name="volume-mute" size={20} color="#fff" />

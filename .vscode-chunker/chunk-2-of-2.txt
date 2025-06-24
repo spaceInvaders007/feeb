@@ -1,0 +1,1215 @@
+    backgroundColor: '#000',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  title: {
+    fontSize: 24,
+    color: '#fff',
+    marginBottom: 20,
+  },
+  recordButton: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#00CFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  hint: {
+    color: '#aaa',
+    marginBottom: 40,
+  },
+  backBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    position: 'absolute',
+    top: 50,
+    left: 20,
+  },
+  backText: {
+    color: '#00CFFF',
+    marginLeft: 6,
+    fontWeight: '600',
+  },
+});
+
+
+// File: screens/ContentsScreen.tsx
+import React, { useState } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  Image,
+  Dimensions,
+} from "react-native";
+import { useNavigation } from "@react-navigation/native";
+import { Ionicons } from "@expo/vector-icons";
+import { Video, ResizeMode } from "expo-av";
+
+const screenWidth = Dimensions.get("window").width;
+
+export default function ContentsScreen() {
+  const navigation = useNavigation<any>();
+
+  const [videoStarted, setVideoStarted] = useState(false);
+  const [thumbnailError, setThumbnailError] = useState(false);
+
+  const videoUri = "https://samplelib.com/lib/preview/mp4/sample-5s.mp4";
+
+  // Better thumbnail URLs that are more reliable
+  const thumbnailUri = thumbnailError 
+    ? 'https://picsum.photos/640/360' // Fallback to Lorem Picsum
+    : 'https://images.unsplash.com/photo-1611162617474-5b21e879e113?w=640&h=360&fit=crop'; // Unsplash video thumbnail
+
+  return (
+    <View style={styles.container}>
+      <Text style={styles.header}>Contents</Text>
+      <View style={styles.card}>
+        <View style={styles.userRow}>
+          <Image
+            source={{ uri: "https://picsum.photos/100/100?random=1" }}
+            style={styles.avatar}
+          />
+          <View>
+            <Text style={styles.username}>
+              Lilian Espech • <Text style={styles.follow}>Following</Text>
+            </Text>
+            <Text style={styles.location}>Los Angeles, USA</Text>
+          </View>
+          <Text style={styles.time}>1 min ago</Text>
+        </View>
+
+        {/* Thumbnail or video */}
+        <TouchableOpacity
+          activeOpacity={0.9}
+          onPress={() => navigation.navigate("RecordReaction", { videoUri })}
+          style={styles.videoWrapper}
+        >
+          {videoStarted ? (
+            <Video
+              source={{ uri: videoUri }}
+              style={styles.video}
+              useNativeControls
+              resizeMode={ResizeMode.CONTAIN}
+              shouldPlay
+            />
+          ) : (
+            <View style={styles.thumbnailContainer}>
+              {/* Thumbnail image */}
+              <Image 
+                source={{ uri: thumbnailUri }} 
+                style={styles.thumbnail}
+                onError={() => {
+                  console.log('Thumbnail failed to load, trying fallback');
+                  setThumbnailError(true);
+                }}
+                onLoad={() => {
+                  console.log('Thumbnail loaded successfully');
+                }}
+              />
+              
+              {/* Overlay with play button */}
+              <View style={styles.feebOverlay}>
+                <View style={styles.playButton}>
+                  <Ionicons name="videocam" size={36} color="white" />
+                </View>
+                <Text style={styles.feebText}>Tap to Feeb it</Text>
+              </View>
+            </View>
+          )}
+        </TouchableOpacity>
+
+        <Text style={styles.caption}>231 ❤️ · 76 🔁 · +41 reactions</Text>
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, padding: 16, backgroundColor: "#fff" },
+  header: { fontSize: 22, fontWeight: "700", marginBottom: 16 },
+  card: { marginBottom: 24 },
+  userRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginBottom: 8,
+  },
+  avatar: { width: 40, height: 40, borderRadius: 20 },
+  username: { fontWeight: "bold" },
+  follow: { color: "#00CFFF" },
+  location: { fontSize: 12, color: "#666" },
+  time: { marginLeft: "auto", fontSize: 12, color: "#aaa" },
+  videoWrapper: {
+    width: "100%",
+    aspectRatio: 16 / 9,
+    borderRadius: 12,
+    overflow: "hidden",
+    backgroundColor: "#f0f0f0", // Light gray background as fallback
+    position: "relative",
+  },
+  video: {
+    width: "100%",
+    height: "100%",
+  },
+  thumbnailContainer: {
+    width: "100%",
+    height: "100%",
+    position: "relative",
+  },
+  thumbnail: {
+    width: "100%",
+    height: "100%",
+    resizeMode: "cover",
+  },
+  feebOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(0, 0, 0, 0.3)", // Semi-transparent overlay
+  },
+  playButton: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: "rgba(0, 207, 255, 0.9)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 12,
+  },
+  feebText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "white",
+    textShadowColor: "rgba(0, 0, 0, 0.7)",
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 3,
+  },
+  caption: { marginTop: 8, fontSize: 14, color: "#444" },
+});
+
+// File: screens/FeedsScreen.tsx
+// screens/FeedsScreen.tsx
+import React from 'react';
+import { View, Text, StyleSheet, Image, TouchableOpacity } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+
+export default function FeedsScreen() {
+  return (
+    <View style={styles.container}>
+      {/* Top camera feed */}
+      <View style={styles.cameraPreview}>
+        <Image
+          source={{ uri: 'https://placekitten.com/400/300' }}
+          style={styles.cameraImage}
+        />
+        <TouchableOpacity style={styles.muteBtn}>
+          <Ionicons name="volume-mute" size={20} color="#fff" />
+        </TouchableOpacity>
+      </View>
+
+      {/* Bottom video feed */}
+      <View style={styles.videoSection}>
+        <Image
+          source={{
+            uri: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde',
+          }}
+          style={styles.videoImage}
+        />
+        <TouchableOpacity style={[styles.muteBtn, { top: 10 }]}>
+          <Ionicons name="volume-mute" size={20} color="#fff" />
+        </TouchableOpacity>
+
+        <View style={styles.sideActions}>
+          <TouchableOpacity style={styles.iconWrap}>
+            <Ionicons name="share-social" size={28} color="#333" />
+            <Text style={styles.iconLabel}>824</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.iconWrap}>
+            <Ionicons name="chatbubble-ellipses" size={28} color="#333" />
+            <Text style={styles.iconLabel}>200</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.iconWrap}>
+            <Ionicons name="heart" size={28} color="#E91E63" />
+            <Text style={styles.iconLabel}>1.2k</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.userInfo}>
+          <Text style={styles.userText}>
+            <Text style={{ fontWeight: 'bold' }}>Lilian Espech</Text> •{' '}
+            <Text style={{ color: '#00CFFF' }}>Follow</Text>
+          </Text>
+          <Text style={styles.location}>Los Angeles, USA</Text>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#fff',
+  },
+  cameraPreview: {
+    height: 160,
+    margin: 16,
+    borderRadius: 16,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  cameraImage: {
+    width: '100%',
+    height: '100%',
+  },
+  muteBtn: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    backgroundColor: '#0008',
+    padding: 6,
+    borderRadius: 20,
+  },
+  videoSection: {
+    flex: 1,
+    position: 'relative',
+  },
+  videoImage: {
+    width: '100%',
+    height: '100%',
+  },
+  sideActions: {
+    position: 'absolute',
+    right: 10,
+    bottom: 80,
+    alignItems: 'center',
+  },
+  iconWrap: {
+    marginBottom: 20,
+    alignItems: 'center',
+  },
+  iconLabel: {
+    fontSize: 12,
+    color: '#333',
+    marginTop: 2,
+  },
+  userInfo: {
+    position: 'absolute',
+    bottom: 20,
+    left: 16,
+  },
+  userText: {
+    color: '#000',
+    fontSize: 16,
+    marginBottom: 2,
+  },
+  location: {
+    fontSize: 12,
+    color: '#666',
+  },
+});
+
+
+// File: screens/RecordReactionScreen.tsx
+// File: screens/RecordReactionScreen.tsx
+import React, { useEffect, useRef, useState } from "react";
+import {
+  View,
+  StyleSheet,
+  TouchableOpacity,
+  ActivityIndicator,
+  Text,
+  Dimensions,
+  Platform,
+  Alert,
+} from "react-native";
+import { Video, ResizeMode, AVPlaybackStatus } from "expo-av";
+import { CameraView, useCameraPermissions } from "expo-camera";
+import type { CameraRecordingOptions } from "expo-camera";
+import { Ionicons } from "@expo/vector-icons";
+import { useNavigation, useRoute } from "@react-navigation/native";
+import { FeebStorage } from "../utils/FeebStorage";
+import WebCamera from "../components/WebCamera";
+
+const { width: screenWidth } = Dimensions.get("screen");
+
+export default function RecordReactionScreen() {
+  const navigation = useNavigation<any>();
+  const route = useRoute<any>();
+  const videoRef = useRef<Video>(null);
+  const cameraRef = useRef<CameraView>(null);
+
+  // Permission + ready states
+  const [permission, requestPermission] = useCameraPermissions();
+  const [videoReady, setVideoReady] = useState(false);
+  const [cameraReady, setCameraReady] = useState(false);
+
+  // Countdown & recording states
+  const [countdown, setCountdown] = useState<number | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [hasStartedFlow, setHasStartedFlow] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Recording control
+  const recordingRef = useRef<Promise<any> | null>(null);
+  const webRecordingBlobRef = useRef<Blob | null>(null);
+
+  const videoUri =
+    route.params?.videoUri ??
+    "https://samplelib.com/lib/preview/mp4/sample-5s.mp4";
+
+  console.log("🔄 Component render - States:", {
+    videoReady,
+    cameraReady,
+    countdown,
+    isRecording,
+    hasStartedFlow,
+    isSaving,
+    platform: Platform.OS,
+    webBlobAvailable: !!webRecordingBlobRef.current
+  });
+
+  // Hide header and request permission
+  useEffect(() => {
+    navigation.setOptions({ headerShown: false });
+    if (Platform.OS !== 'web' && !permission?.granted) {
+      requestPermission();
+    }
+  }, [permission, navigation]);
+
+  // Start countdown ONLY when both ready AND not started yet
+  useEffect(() => {
+    const isReady = videoReady && cameraReady;
+
+    if (isReady && !hasStartedFlow) {
+      console.log("✅ Ready, starting countdown");
+      setHasStartedFlow(true);
+      setCountdown(2);
+    }
+  }, [videoReady, cameraReady, hasStartedFlow]);
+
+  // Countdown timer mechanism
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (countdown !== null && countdown > 0) {
+      console.log(`⏱️ Countdown: ${countdown}`);
+      timer = setTimeout(() => {
+        setCountdown(countdown - 1);
+      }, 1000);
+    } else if (countdown === 0) {
+      console.log("🎬 Countdown finished, starting recording");
+      setCountdown(null);
+      startRecording();
+    }
+    return () => clearTimeout(timer);
+  }, [countdown]);
+
+  // Start recording and video playback
+  const startRecording = async () => {
+    if (!videoRef.current) {
+      console.log("❌ Video ref not available");
+      return;
+    }
+
+    console.log(`🎥 Starting recording on ${Platform.OS}...`);
+    setIsRecording(true);
+
+    try {
+      if (Platform.OS !== 'web' && cameraRef.current) {
+        // Mobile: Start actual camera recording
+        const options: CameraRecordingOptions = {};
+        recordingRef.current = cameraRef.current.recordAsync(options);
+        console.log("📹 Mobile: Camera recording started");
+      }
+      // Web recording is handled by WebCamera component via isRecording prop
+
+      // Set up video playback monitoring BEFORE starting playback
+      const playbackStatusHandler = (status: AVPlaybackStatus) => {
+        console.log("📺 Video status:", {
+          isLoaded: status.isLoaded,
+          isPlaying: status.isLoaded ? status.isPlaying : false,
+          positionMillis: status.isLoaded ? status.positionMillis : 0,
+          durationMillis: status.isLoaded ? status.durationMillis : 0,
+          didJustFinish: status.isLoaded ? status.didJustFinish : false
+        });
+
+        if (status.isLoaded && status.didJustFinish) {
+          console.log("🏁 Video finished, stopping recording");
+          stopRecording();
+        }
+      };
+
+      videoRef.current.setOnPlaybackStatusUpdate(playbackStatusHandler);
+
+      // Reset video position and start playback
+      await videoRef.current.setPositionAsync(0);
+      await videoRef.current.playAsync();
+      console.log("▶️ Video playback started");
+
+    } catch (err) {
+      console.error("❌ Error starting recording:", err);
+      setIsRecording(false);
+      setHasStartedFlow(false);
+    }
+  };
+
+  // Stop recording and save feeb
+  const stopRecording = async () => {
+    console.log(`🛑 Stopping recording on ${Platform.OS}...`);
+    setIsSaving(true);
+    
+    try {
+      let recordingUri = '';
+      let recordingBlob: Blob | null = null;
+
+      if (Platform.OS !== 'web' && cameraRef.current && recordingRef.current) {
+        // Mobile: Stop actual camera recording
+        cameraRef.current.stopRecording();
+        const recording = await recordingRef.current;
+        recordingUri = recording.uri;
+        console.log("✅ Mobile: Recording completed:", recordingUri);
+      } else if (Platform.OS === 'web') {
+        // Web: Check for recorded blob
+        const currentBlob = webRecordingBlobRef.current;
+        if (currentBlob) {
+          recordingBlob = currentBlob;
+          console.log("✅ Web: Recording blob available:", currentBlob.size, "bytes");
+        } else {
+          console.log("⚠️ Web: No recording blob available, checking if recording is still in progress...");
+          // Wait a moment for the recording to complete
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          const delayedBlob = webRecordingBlobRef.current;
+          if (delayedBlob) {
+            recordingBlob = delayedBlob;
+            console.log("✅ Web: Recording blob found after delay:", delayedBlob.size, "bytes");
+          }
+        }
+      }
+
+      // Save the feeb automatically
+      if (recordingUri || recordingBlob) {
+        if (Platform.OS === 'web' && recordingBlob) {
+          await saveFeebAutomatically(null, recordingBlob);
+        } else if (recordingUri) {
+          await saveFeebAutomatically(recordingUri);
+        }
+        console.log("✅ Feeb save process completed successfully");
+      } else {
+        throw new Error('No recording available');
+      }
+
+    } catch (err) {
+      console.error("❌ Error stopping recording:", err);
+      Alert.alert("Error", "Failed to save your feeb. Please try again.");
+    } finally {
+      // Clean up
+      if (videoRef.current) {
+        videoRef.current.setOnPlaybackStatusUpdate(null);
+      }
+      recordingRef.current = null;
+      webRecordingBlobRef.current = null;
+      setIsRecording(false);
+      setIsSaving(false);
+      
+      // Navigate back after a short delay, with error handling
+      setTimeout(() => {
+        try {
+          if (navigation.canGoBack()) {
+            navigation.goBack();
+          } else {
+            // Navigate to profile tab as fallback
+            navigation.navigate('MainTabs', { screen: 'Profile' });
+          }
+        } catch (navError) {
+          console.error('❌ Navigation error:', navError);
+          // Force navigation to main tabs
+          navigation.reset({
+            index: 0,
+            routes: [{ name: 'MainTabs', params: { screen: 'Profile' } }],
+          });
+        }
+      }, 1500); // Increased delay to ensure save completes
+    }
+  };
+
+  // Save feeb automatically to storage
+  const saveFeebAutomatically = async (recordingUri?: string | null, recordingBlob?: Blob | null) => {
+    try {
+      console.log("💾 Saving feeb automatically...");
+      
+      let permanentVideoUri: string;
+
+      if (Platform.OS === 'web' && recordingBlob) {
+        // Web: Convert blob to persistent storage
+        console.log("🌐 Converting web blob to persistent storage...");
+        permanentVideoUri = await FeebStorage.saveWebVideoBlob(recordingBlob);
+        console.log("💾 Web: Converted blob to persistent storage, URI:", permanentVideoUri);
+      } else if (recordingUri) {
+        // Mobile: Save video to permanent location
+        console.log("📱 Saving mobile video to permanent location...");
+        permanentVideoUri = await FeebStorage.saveVideoToPermanentLocation(recordingUri);
+        console.log("💾 Mobile: Saved to permanent location:", permanentVideoUri);
+      } else {
+        throw new Error('No recording data provided');
+      }
+      
+      // Create feeb record
+      console.log("📝 Creating feeb record...");
+      const newFeeb = FeebStorage.createFeeb(permanentVideoUri, videoUri);
+      console.log("📝 Created feeb record:", newFeeb.id);
+      
+      // Save to storage
+      console.log("💾 Saving feeb to storage...");
+      await FeebStorage.saveFeeb(newFeeb);
+      console.log("✅ Feeb saved to storage successfully!");
+      
+      console.log("🎉 Feeb saved successfully!");
+      
+      // Show success message briefly
+      Alert.alert(
+        "Success!",
+        "Your feeb has been saved to your profile.",
+        [{ text: "OK" }],
+        { cancelable: true }
+      );
+      
+      return true; // Indicate success
+      
+    } catch (error) {
+      console.error("❌ Error saving feeb:", error);
+      Alert.alert(
+        "Save Error", 
+        `Failed to save your feeb: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
+      throw error;
+    }
+  };
+
+  // Web-specific video ready handler
+  const handleVideoReady = (videoData: any) => {
+    console.log("📺 Video ready for display");
+    if (Platform.OS === 'web' && videoData?.srcElement?.style) {
+      videoData.srcElement.style.position = "initial";
+      videoData.srcElement.style.width = "100%";
+      videoData.srcElement.style.height = "100%";
+      videoData.srcElement.style.objectFit = "contain";
+    }
+    setVideoReady(true);
+  };
+
+  const handleCameraReady = () => {
+    console.log("📹 Camera ready");
+    setCameraReady(true);
+  };
+
+  const handleWebRecordingComplete = (videoBlob: Blob) => {
+    console.log("🎬 Web recording completed:", videoBlob);
+    webRecordingBlobRef.current = videoBlob;
+    console.log("📝 Stored blob in ref, size:", videoBlob.size, "bytes");
+  };
+
+  // Web-specific permission handling
+  if (Platform.OS === 'web') {
+    return renderMainContent();
+  }
+
+  // Mobile permission handling
+  if (!permission?.granted) {
+    return (
+      <View style={styles.permissionContainer}>
+        <Ionicons name="camera" size={48} color="#666" />
+        <Text style={styles.permissionText}>Camera permission required</Text>
+        <TouchableOpacity onPress={requestPermission} style={styles.permissionButton}>
+          <Text style={styles.permissionButtonText}>Grant Permission</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  return renderMainContent();
+
+  function renderMainContent() {
+    const isAllReady = videoReady && cameraReady;
+
+    return (
+      <View style={styles.container}>
+        {/* Back button */}
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => navigation.goBack()}
+          disabled={isRecording || isSaving}
+        >
+          <View style={[styles.backButtonCircle, (isRecording || isSaving) && styles.disabledButton]}>
+            <Ionicons name="arrow-back" size={24} color="#fff" />
+          </View>
+        </TouchableOpacity>
+
+        {/* Recording indicator */}
+        {isRecording && (
+          <View style={styles.recordingIndicator}>
+            <View style={styles.redDot} />
+            <Text style={styles.recordingText}>REC</Text>
+          </View>
+        )}
+
+        {/* Top half: Video */}
+        <View style={styles.half}>
+          <Video
+            ref={videoRef}
+            source={{ uri: videoUri }}
+            resizeMode={ResizeMode.CONTAIN}
+            useNativeControls={false}
+            shouldPlay={false}
+            isLooping={false}
+            isMuted={false}
+            style={styles.video}
+            videoStyle={
+              Platform.OS === "web" ? styles.webVideoStyle : undefined
+            }
+            onReadyForDisplay={handleVideoReady}
+          />
+        </View>
+
+        {/* Bottom half: Camera */}
+        <View style={styles.half}>
+          {Platform.OS === 'web' ? (
+            <WebCamera
+              isRecording={isRecording}
+              onCameraReady={handleCameraReady}
+              onRecordingComplete={handleWebRecordingComplete}
+            />
+          ) : (
+            <CameraView
+              ref={cameraRef}
+              style={StyleSheet.absoluteFillObject}
+              facing="front"
+              mode="video"
+              onCameraReady={handleCameraReady}
+            />
+          )}
+        </View>
+
+        {/* Loading spinner until both ready */}
+        {!isAllReady && (
+          <View style={styles.overlay}>
+            <ActivityIndicator size="large" color="#00CFFF" />
+            <Text style={styles.loadingText}>
+              {Platform.OS === 'web' ? 'Loading camera...' : 'Loading...'}
+            </Text>
+          </View>
+        )}
+
+        {/* Countdown overlay */}
+        {countdown !== null && (
+          <View style={styles.overlay}>
+            <Text style={styles.countdownText}>{countdown}</Text>
+          </View>
+        )}
+
+        {/* Saving overlay */}
+        {isSaving && (
+          <View style={styles.overlay}>
+            <ActivityIndicator size="large" color="#00CFFF" />
+            <Text style={styles.loadingText}>Saving your feeb...</Text>
+          </View>
+        )}
+      </View>
+    );
+  }
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: "#000" },
+  half: { flex: 1, overflow: "hidden", backgroundColor: "#000" },
+
+  backButton: { position: "absolute", top: 50, left: 20, zIndex: 1000 },
+  backButtonCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  disabledButton: {
+    opacity: 0.5,
+  },
+
+  video: { flex: 1, width: screenWidth, backgroundColor: "#000" },
+  webVideoStyle: {
+    objectFit: "contain",
+    width: "100%",
+    height: "100%",
+  },
+
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0, 0, 0, 0.7)",
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 999,
+  },
+  loadingText: {
+    color: "#fff",
+    marginTop: 16,
+    fontSize: 16,
+  },
+  countdownText: { 
+    fontSize: 120, 
+    color: "#fff", 
+    fontWeight: "bold",
+    textAlign: "center",
+  },
+
+  recordingIndicator: { 
+    position: "absolute", 
+    top: 50, 
+    right: 20, 
+    zIndex: 1000,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  redDot: { 
+    width: 16, 
+    height: 16, 
+    borderRadius: 8, 
+    backgroundColor: "#ff0000",
+    marginRight: 8,
+  },
+  recordingText: {
+    color: "#ff0000",
+    fontSize: 14,
+    fontWeight: "bold",
+  },
+
+  permissionContainer: {
+    flex: 1,
+    backgroundColor: "#000",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 20,
+  },
+  permissionText: { 
+    marginTop: 12, 
+    color: "#888", 
+    textAlign: "center",
+    marginBottom: 20,
+  },
+  permissionButton: {
+    backgroundColor: "#00CFFF",
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  permissionButtonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "bold",
+  },
+});
+
+// File: screens/UploadContentScreen.tsx
+// screens/UploadContentScreen.tsx
+import React from 'react';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+
+export default function UploadContentScreen() {
+  const handleUpload = () => {
+    alert('Here you would pick a video from device or record new content.');
+  };
+
+  return (
+    <View style={styles.container}>
+      <Ionicons name="cloud-upload" size={64} color="#00CFFF" />
+      <Text style={styles.title}>Upload a Video</Text>
+      <Text style={styles.description}>
+        Choose a video from your phone or record one to share with others.
+      </Text>
+      <TouchableOpacity style={styles.button} onPress={handleUpload}>
+        <Text style={styles.buttonText}>Select Video</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 32,
+  },
+  title: {
+    fontSize: 24,
+    marginTop: 20,
+    fontWeight: 'bold',
+  },
+  description: {
+    marginTop: 12,
+    textAlign: 'center',
+    color: '#666',
+  },
+  button: {
+    marginTop: 24,
+    backgroundColor: '#00CFFF',
+    paddingVertical: 14,
+    paddingHorizontal: 32,
+    borderRadius: 8,
+  },
+  buttonText: {
+    color: 'white',
+    fontWeight: '600',
+    fontSize: 16,
+  },
+});
+
+
+// File: utils/FeebStorage.ts
+// File: utils/FeebStorage.ts
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as FileSystem from 'expo-file-system';
+import { Platform } from 'react-native';
+
+export interface Feeb {
+  id: string;
+  uri: string; // Local file path or persistent data URL for web
+  originalVideoUri: string; // The video they reacted to
+  createdAt: string;
+  thumbnail?: string; // Optional thumbnail
+  isWebBlob?: boolean; // Flag to indicate if it's a web blob (now converted to data URL)
+}
+
+const FEEBS_STORAGE_KEY = 'user_feebs';
+const WEB_VIDEO_STORAGE_KEY = 'web_video_data_';
+
+export class FeebStorage {
+  // Get all user's feebs
+  static async getAllFeebs(): Promise<Feeb[]> {
+    try {
+      const feebsJson = await AsyncStorage.getItem(FEEBS_STORAGE_KEY);
+      return feebsJson ? JSON.parse(feebsJson) : [];
+    } catch (error) {
+      console.error('Error loading feebs:', error);
+      return [];
+    }
+  }
+
+  // Save a new feeb
+  static async saveFeeb(feeb: Feeb): Promise<void> {
+    try {
+      const existingFeebs = await this.getAllFeebs();
+      const updatedFeebs = [feeb, ...existingFeebs]; // Add new feeb at the beginning
+      await AsyncStorage.setItem(FEEBS_STORAGE_KEY, JSON.stringify(updatedFeebs));
+      console.log('✅ Feeb saved successfully:', feeb.id);
+    } catch (error) {
+      console.error('Error saving feeb:', error);
+      throw error;
+    }
+  }
+
+  // Web-specific: Save video blob to persistent storage
+  static async saveWebVideoBlob(blob: Blob): Promise<string> {
+    try {
+      console.log('🌐 Converting blob to persistent storage...');
+      console.log('📊 Blob info:', { size: blob.size, type: blob.type });
+      
+      // Convert blob to data URL for persistence
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          console.log('📖 FileReader completed');
+          resolve(reader.result as string);
+        };
+        reader.onerror = (error) => {
+          console.error('❌ FileReader error:', error);
+          reject(error);
+        };
+        reader.readAsDataURL(blob);
+        console.log('📖 Starting FileReader...');
+      });
+
+      console.log('✅ Data URL created, length:', dataUrl.length);
+
+      // Generate unique ID for this video
+      const videoId = `feeb_video_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      console.log('🆔 Generated video ID:', videoId);
+      
+      // Store the data URL in AsyncStorage with a unique key
+      const storageKey = WEB_VIDEO_STORAGE_KEY + videoId;
+      console.log('💾 Storing with key:', storageKey);
+      await AsyncStorage.setItem(storageKey, dataUrl);
+      
+      console.log('💾 Web video saved to persistent storage:', videoId);
+      console.log('📊 Data URL size:', Math.round(dataUrl.length / 1024), 'KB');
+      
+      // Return the video ID as the persistent URI
+      return videoId;
+    } catch (error) {
+      console.error('❌ Error saving web video blob:', error);
+      throw error;
+    }
+  }
+
+  // Web-specific: Retrieve video data URL from storage
+  static async getWebVideoDataUrl(videoId: string): Promise<string | null> {
+    try {
+      const dataUrl = await AsyncStorage.getItem(WEB_VIDEO_STORAGE_KEY + videoId);
+      if (dataUrl) {
+        console.log('✅ Retrieved web video data URL for:', videoId);
+        return dataUrl;
+      } else {
+        console.log('❌ No data URL found for video ID:', videoId);
+        return null;
+      }
+    } catch (error) {
+      console.error('❌ Error retrieving web video:', error);
+      return null;
+    }
+  }
+
+  // Save recorded video to permanent location (platform-specific)
+  static async saveVideoToPermanentLocation(tempUri: string): Promise<string> {
+    if (Platform.OS === 'web') {
+      // On web, this shouldn't be called anymore - use saveWebVideoBlob instead
+      console.warn('⚠️ saveVideoToPermanentLocation called on web - use saveWebVideoBlob instead');
+      return tempUri;
+    }
+
+    try {
+      const fileName = `feeb_${Date.now()}.mp4`;
+      const permanentUri = `${FileSystem.documentDirectory}feebs/${fileName}`;
+      
+      // Create feebs directory if it doesn't exist
+      const feebsDir = `${FileSystem.documentDirectory}feebs/`;
+      const dirInfo = await FileSystem.getInfoAsync(feebsDir);
+      if (!dirInfo.exists) {
+        await FileSystem.makeDirectoryAsync(feebsDir, { intermediates: true });
+      }
+
+      // Copy the temporary file to permanent location
+      await FileSystem.copyAsync({
+        from: tempUri,
+        to: permanentUri,
+      });
+
+      console.log('📁 Video saved to permanent location:', permanentUri);
+      return permanentUri;
+    } catch (error) {
+      console.error('Error saving video permanently:', error);
+      throw error;
+    }
+  }
+
+  // Create a new feeb record
+  static createFeeb(videoUri: string, originalVideoUri: string): Feeb {
+    return {
+      id: `feeb_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      uri: videoUri,
+      originalVideoUri,
+      createdAt: new Date().toISOString(),
+      isWebBlob: Platform.OS === 'web',
+    };
+  }
+
+  // Delete a feeb (platform-specific cleanup)
+  static async deleteFeeb(feebId: string): Promise<void> {
+    try {
+      const feebs = await this.getAllFeebs();
+      const feebToDelete = feebs.find(feeb => feeb.id === feebId);
+      
+      if (feebToDelete) {
+        // Clean up the video file/data
+        if (Platform.OS === 'web') {
+          // Remove from AsyncStorage if it's a web video ID
+          if (feebToDelete.isWebBlob && !feebToDelete.uri.startsWith('data:')) {
+            await AsyncStorage.removeItem(WEB_VIDEO_STORAGE_KEY + feebToDelete.uri);
+            console.log('🗑️ Web: Deleted video data for ID:', feebToDelete.uri);
+          }
+          // If it was an old blob URL, just log (already invalid anyway)
+          if (feebToDelete.uri.startsWith('blob:')) {
+            console.log('🗑️ Web: Old blob URL will be garbage collected');
+          }
+        } else {
+          // Delete the actual file on mobile
+          await FileSystem.deleteAsync(feebToDelete.uri, { idempotent: true });
+          console.log('🗑️ Mobile: Deleted video file');
+        }
+      }
+
+      // Remove from feebs list
+      const updatedFeebs = feebs.filter(feeb => feeb.id !== feebId);
+      await AsyncStorage.setItem(FEEBS_STORAGE_KEY, JSON.stringify(updatedFeebs));
+      
+    } catch (error) {
+      console.error('Error deleting feeb:', error);
+      throw error;
+    }
+  }
+
+  // Web-specific: Create a mock recording for demonstration (fallback)
+  static async createMockWebRecording(originalVideoUri: string): Promise<Feeb> {
+    // Create a simple canvas-based "recording" as a placeholder
+    const canvas = document.createElement('canvas');
+    canvas.width = 400;
+    canvas.height = 300;
+    const ctx = canvas.getContext('2d');
+    
+    if (ctx) {
+      // Create a simple gradient background
+      const gradient = ctx.createLinearGradient(0, 0, 400, 300);
+      gradient.addColorStop(0, '#00CFFF');
+      gradient.addColorStop(1, '#0066CC');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, 400, 300);
+      
+      // Add some text
+      ctx.fillStyle = 'white';
+      ctx.font = '24px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('Mock Feeb Recording', 200, 130);
+      ctx.font = '16px Arial';
+      ctx.fillText('(Web Preview)', 200, 160);
+      ctx.fillText(new Date().toLocaleString(), 200, 190);
+    }
+    
+    return new Promise((resolve) => {
+      canvas.toBlob(async (blob) => {
+        if (blob) {
+          const persistentUri = await this.saveWebVideoBlob(blob);
+          const feeb = this.createFeeb(persistentUri, originalVideoUri);
+          resolve(feeb);
+        }
+      }, 'image/png');
+    });
+  }
+
+  // Helper: Check if a URI is a web video ID
+  static isWebVideoId(uri: string): boolean {
+    return Platform.OS === 'web' && !uri.startsWith('data:') && !uri.startsWith('blob:') && !uri.startsWith('http');
+  }
+
+  // Helper: Get display URI for a feeb (handles web video IDs)
+  static async getFeebDisplayUri(feeb: Feeb): Promise<string> {
+    if (Platform.OS === 'web' && feeb.isWebBlob) {
+      // If it's an old blob URL, it's no longer valid
+      if (feeb.uri.startsWith('blob:')) {
+        console.log('⚠️ Old blob URL detected, cannot retrieve data:', feeb.uri);
+        return ''; // Return empty string to trigger error state
+      }
+      
+      // If it's already a data URL, return as-is
+      if (feeb.uri.startsWith('data:')) {
+        console.log('✅ Data URL found, returning directly');
+        return feeb.uri;
+      }
+      
+      // If it's a web video ID, retrieve the data URL
+      if (this.isWebVideoId(feeb.uri)) {
+        console.log('🔍 Retrieving data URL for video ID:', feeb.uri);
+        const dataUrl = await this.getWebVideoDataUrl(feeb.uri);
+        if (dataUrl) {
+          console.log('✅ Data URL retrieved successfully');
+          return dataUrl;
+        } else {
+          console.log('❌ Failed to retrieve data URL for video ID:', feeb.uri);
+          return ''; // Return empty string to trigger error state
+        }
+      }
+    }
+    
+    // For mobile or direct URIs, return as-is
+    return feeb.uri;
+  }
+}
+
+// File: navigation/RootNavigator.tsx
+// File: navigation/RootNavigator.tsx
+import React from 'react';
+import { NavigationContainer } from '@react-navigation/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { Ionicons } from '@expo/vector-icons';
+
+import FeedsScreen from '../screens/FeedsScreen';
+import ContentsScreen from '../screens/ContentsScreen';
+import ChatsScreen from '../screens/ChatsScreen';
+import ProfileScreen from '../screens/ProfileScreen';
+import CreateFeebScreen from '../screens/CreateFeebScreen';
+import UploadContentScreen from '../screens/UploadContentScreen';
+import RecordReactionScreen from '../screens/RecordReactionScreen';
+
+const Tab = createBottomTabNavigator();
+const Stack = createNativeStackNavigator();
+
+// Create a placeholder component instead of inline function
+function UploadPlaceholder() {
+  return null;
+}
+
+function MainTabs({ navigation }: any) {
+  return (
+    <Tab.Navigator
+      screenOptions={({ route }) => ({
+        tabBarIcon: ({ color, size }) => {
+          let iconName: any;
+          if (route.name === 'Feebs') iconName = 'shield';
+          else if (route.name === 'Contents') iconName = 'film';
+          else if (route.name === 'Chats') iconName = 'chatbubble';
+          else if (route.name === 'Profile') iconName = 'person';
+          else if (route.name === 'Upload') iconName = 'add-circle';
+          return <Ionicons name={iconName} size={size} color={color} />;
+        },
+        tabBarActiveTintColor: '#00CFFF',
+        tabBarInactiveTintColor: 'gray',
+        headerShown: false,
+      })}
+    >
+      <Tab.Screen name="Feebs" component={FeedsScreen} />
+      <Tab.Screen name="Contents" component={ContentsScreen} />
+      <Tab.Screen
+        name="Upload"
+        component={UploadPlaceholder}
+        options={{
+          tabBarIcon: ({ size }) => (
+            <Ionicons
+              name="add-circle"
+              size={size + 8}
+              color="#00CFFF"
+              style={{ marginTop: -10 }}
+            />
+          ),
+        }}
+        listeners={({ navigation }) => ({
+          tabPress: (e) => {
+            e.preventDefault();
+            navigation.navigate('UploadContent');
+          },
+        })}
+      />
+      <Tab.Screen name="Chats" component={ChatsScreen} />
+      <Tab.Screen name="Profile" component={ProfileScreen} />
+    </Tab.Navigator>
+  );
+}
+
+export default function RootNavigator() {
+  return (
+    <NavigationContainer>
+      <Stack.Navigator>
+        <Stack.Screen name="MainTabs" component={MainTabs} options={{ headerShown: false }} />
+        <Stack.Screen name="CreateFeeb" component={CreateFeebScreen} options={{ presentation: 'modal', title: 'Record Reaction' }} />
+        <Stack.Screen name="UploadContent" component={UploadContentScreen} options={{ title: 'Upload Video' }} />
+        <Stack.Screen name="RecordReaction" component={RecordReactionScreen} options={{ title: 'React to Video' }} />
+      </Stack.Navigator>
+    </NavigationContainer>
+  );
+}

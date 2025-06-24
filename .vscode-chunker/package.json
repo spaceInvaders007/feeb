@@ -1,0 +1,28 @@
+{
+  "name": "vscode-chunker",
+  "displayName": "Codebase Chunker",
+  "description": "Splits your workspace codebase into prompt-sized chunks and writes chunk files to a folder",
+  "version": "0.0.4",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": ["Other"],
+  "activationEvents": ["onCommand:extension.createCodebaseChunks"],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "extension.createCodebaseChunks",
+        "title": "Create Codebase Chunk Files"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./"
+  },
+  "devDependencies": {
+    "typescript": "^4.0.0",
+    "@types/vscode": "^1.80.0"
+  }
+}

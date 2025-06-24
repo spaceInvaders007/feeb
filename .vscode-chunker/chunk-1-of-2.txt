@@ -1,0 +1,1436 @@
+
+
+// File: App.tsx
+// App.tsx
+import RootNavigator from './navigation/RootNavigator';
+
+export default function App() {
+  return <RootNavigator />;
+}
+
+
+// File: app.json
+{
+  "expo": {
+    "name": "feeb",
+    "slug": "feeb",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "edgeToEdgeEnabled": true
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    }
+  }
+}
+
+
+// File: tsconfig.json
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true
+  }
+}
+
+
+// File: index.ts
+import { registerRootComponent } from 'expo';
+
+import App from './App';
+
+// registerRootComponent calls AppRegistry.registerComponent('main', () => App);
+// It also ensures that whether you load the app in Expo Go or in a native build,
+// the environment is set up appropriately
+registerRootComponent(App);
+
+
+// File: package.json
+{
+  "name": "feeb",
+  "license": "0BSD",
+  "version": "1.0.0",
+  "main": "index.ts",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web"
+  },
+  "dependencies": {
+    "@expo/metro-runtime": "~5.0.4",
+    "@react-navigation/bottom-tabs": "^7.4.1",
+    "@react-navigation/native": "^7.1.14",
+    "@react-navigation/native-stack": "^7.3.20",
+    "@react-native-async-storage/async-storage": "^2.1.0",
+    "expo": "~53.0.12",
+    "expo-av": "~15.1.6",
+    "expo-camera": "~16.1.8",
+    "expo-file-system": "~18.1.0",
+    "expo-status-bar": "~2.2.3",
+    "prettier": "^3.6.0",
+    "react": "19.0.0",
+    "react-dom": "^19.0.0",
+    "react-native": "0.79.4",
+    "react-native-web": "^0.20.0"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.25.2",
+    "@types/react": "~19.0.10",
+    "typescript": "~5.8.3"
+  },
+  "private": true
+}
+
+// File: components/ProfileTabs.tsx
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import React, { useState } from 'react';
+
+export default function ProfileTabs() {
+  const [active, setActive] = useState<'feebs' | 'contents'>('feebs');
+
+  return (
+    <View style={styles.wrapper}>
+      <TouchableOpacity
+        style={[styles.tab, active === 'feebs' && styles.active]}
+        onPress={() => setActive('feebs')}
+      >
+        <Text style={styles.label}>Feebs</Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={[styles.tab, active === 'contents' && styles.active]}
+        onPress={() => setActive('contents')}
+      >
+        <Text style={styles.label}>Contents</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  wrapper: {
+    flexDirection: 'row',
+    marginVertical: 16,
+  },
+  tab: {
+    flex: 1,
+    alignItems: 'center',
+    padding: 12,
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  active: {
+    borderBottomColor: '#00CFFF',
+  },
+  label: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+});
+
+
+// File: .expo/devices.json
+{
+  "devices": []
+}
+
+
+// File: components/WebCamera.tsx
+// File: components/WebCamera.tsx
+import React, { useRef, useEffect, useState } from 'react';
+import { View, StyleSheet, Platform, Text } from 'react-native';
+
+interface WebCameraProps {
+  isRecording: boolean;
+  onCameraReady: () => void;
+  onRecordingComplete: (videoBlob: Blob) => void;
+}
+
+export default function WebCamera({ isRecording, onCameraReady, onRecordingComplete }: WebCameraProps) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const [hasPermission, setHasPermission] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [isInitializing, setIsInitializing] = useState(false);
+  const [debugInfo, setDebugInfo] = useState<string>('');
+
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      // Small delay to ensure component is fully mounted
+      const timer = setTimeout(() => {
+        initializeCamera();
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+    return () => {
+      cleanup();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (Platform.OS === 'web' && hasPermission && streamRef.current && videoRef.current) {
+      // Set up video element when both stream and ref are available
+      console.log('🔗 Setting up video element with existing stream...');
+      videoRef.current.srcObject = streamRef.current;
+      videoRef.current.play().catch(console.log);
+    }
+  }, [hasPermission]);
+
+  useEffect(() => {
+    if (Platform.OS === 'web' && hasPermission) {
+      if (isRecording) {
+        startRecording();
+      } else {
+        stopRecording();
+      }
+    }
+  }, [isRecording, hasPermission]);
+
+  const checkCameraAvailability = async () => {
+    try {
+      console.log('🔍 Checking camera availability...');
+      
+      // Check if mediaDevices API is supported
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error('Media devices API not supported in this browser');
+      }
+
+      // Check available devices
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const videoDevices = devices.filter(device => device.kind === 'videoinput');
+      
+      console.log('📱 Available video devices:', videoDevices.length);
+      console.log('📋 All devices:', devices.map(d => ({ kind: d.kind, label: d.label || 'Unknown' })));
+      setDebugInfo(`Found ${videoDevices.length} camera(s)`);
+
+      if (videoDevices.length === 0) {
+        throw new Error('No camera devices found on this device');
+      }
+
+      return videoDevices;
+    } catch (error) {
+      console.error('❌ Camera availability check failed:', error);
+      throw error;
+    }
+  };
+
+  const initializeCamera = async () => {
+    if (isInitializing) {
+      console.log('⏳ Camera initialization already in progress...');
+      return;
+    }
+
+    try {
+      setIsInitializing(true);
+      setError(null);
+      console.log('🌐 Initializing web camera...');
+      
+      // First check if cameras are available
+      await checkCameraAvailability();
+
+      // Try different constraint configurations
+      const constraintOptions = [
+        // Preferred: front camera with specific resolution
+        {
+          video: { 
+            facingMode: 'user',
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          }, 
+          audio: true 
+        },
+        // Fallback 1: front camera with lower resolution
+        {
+          video: { 
+            facingMode: 'user',
+            width: { ideal: 640 },
+            height: { ideal: 480 }
+          }, 
+          audio: true 
+        },
+        // Fallback 2: any camera
+        {
+          video: true, 
+          audio: true 
+        },
+        // Fallback 3: video only, no audio
+        {
+          video: true, 
+          audio: false 
+        }
+      ];
+
+      let stream: MediaStream | null = null;
+      let lastError: Error | null = null;
+
+      for (let i = 0; i < constraintOptions.length; i++) {
+        try {
+          console.log(`🎥 Attempting camera access with configuration ${i + 1}...`);
+          setDebugInfo(`Trying camera config ${i + 1}/${constraintOptions.length}`);
+          stream = await navigator.mediaDevices.getUserMedia(constraintOptions[i]);
+          console.log(`✅ Camera access successful with configuration ${i + 1}`);
+          setDebugInfo(`Camera access successful!`);
+          break;
+        } catch (err) {
+          lastError = err as Error;
+          console.log(`❌ Configuration ${i + 1} failed:`, err);
+          setDebugInfo(`Config ${i + 1} failed: ${lastError.message}`);
+          continue;
+        }
+      }
+
+      if (!stream) {
+        throw lastError || new Error('Failed to access camera with all configurations');
+      }
+
+      streamRef.current = stream;
+
+      // Check if video ref is available, if not, still proceed
+      if (videoRef.current) {
+        console.log('📺 Setting up video element...');
+        
+        const setupVideoElement = () => {
+          return new Promise<void>((resolve, reject) => {
+            if (!videoRef.current) {
+              reject(new Error('Video element not available'));
+              return;
+            }
+
+            // Set stream to video element
+            videoRef.current.srcObject = stream;
+            console.log('📺 Stream assigned to video element');
+
+            // Start playing the video
+            console.log('🎬 Starting video play...');
+            videoRef.current.play()
+              .then(() => {
+                console.log('▶️ Video.play() resolved');
+                resolve();
+              })
+              .catch((playError) => {
+                console.log('⚠️ Video.play() failed, but continuing:', playError);
+                resolve(); // Don't fail the whole process
+              });
+          });
+        };
+        
+        // Start video setup in background but don't wait for it
+        setupVideoElement().catch((err) => {
+          console.log('⚠️ Video setup failed but continuing:', err);
+        });
+      } else {
+        console.log('⚠️ Video ref not available yet, will retry...');
+        // Retry setting up video element after a short delay
+        setTimeout(() => {
+          if (videoRef.current && streamRef.current) {
+            console.log('🔄 Retrying video element setup...');
+            videoRef.current.srcObject = streamRef.current;
+            videoRef.current.play().catch(console.log);
+          }
+        }, 500);
+      }
+
+      // Since we have a working stream, trigger ready immediately
+      console.log('🚀 Stream ready, triggering callback immediately');
+      setHasPermission(true);
+      setDebugInfo('Camera ready!');
+      console.log('🔔 Triggering onCameraReady callback');
+      onCameraReady();
+    } catch (error) {
+      console.error('❌ Failed to initialize camera:', error);
+      setHasPermission(false);
+      
+      // Set user-friendly error messages
+      let errorMessage = 'Failed to access camera';
+      if (error instanceof Error) {
+        if (error.name === 'NotFoundError') {
+          errorMessage = 'No camera found. Please connect a camera and try again.';
+        } else if (error.name === 'NotAllowedError') {
+          errorMessage = 'Camera permission denied. Please allow camera access and refresh the page.';
+        } else if (error.name === 'NotReadableError') {
+          errorMessage = 'Camera is busy or unavailable. Please close other applications using the camera.';
+        } else if (error.message.includes('Media devices API not supported')) {
+          errorMessage = 'Camera not supported in this browser. Please use Chrome, Firefox, or Safari.';
+        } else if (error.message.includes('No camera devices found')) {
+          errorMessage = 'No camera detected. Please connect a camera or check your device settings.';
+        }
+      }
+      
+      setError(errorMessage);
+    } finally {
+      setIsInitializing(false);
+    }
+  };
+
+  const startRecording = () => {
+    if (!streamRef.current) {
+      console.error('❌ No stream available for recording');
+      return;
+    }
+
+    try {
+      console.log('🎥 Starting web recording...');
+      
+      // Try different MIME types for better compatibility
+      const mimeTypes = [
+        'video/webm;codecs=vp9,opus',
+        'video/webm;codecs=vp8,opus', 
+        'video/webm;codecs=h264,opus',
+        'video/webm',
+        'video/mp4'
+      ];
+
+      let mediaRecorder: MediaRecorder | null = null;
+      for (const mimeType of mimeTypes) {
+        if (MediaRecorder.isTypeSupported(mimeType)) {
+          console.log(`📼 Using MIME type: ${mimeType}`);
+          mediaRecorder = new MediaRecorder(streamRef.current, { mimeType });
+          break;
+        }
+      }
+
+      if (!mediaRecorder) {
+        // Fallback to default
+        mediaRecorder = new MediaRecorder(streamRef.current);
+        console.log('📼 Using default MediaRecorder settings');
+      }
+
+      const chunks: BlobPart[] = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          chunks.push(event.data);
+          console.log(`📊 Recording chunk: ${event.data.size} bytes`);
+        }
+      };
+
+      mediaRecorder.onstop = () => {
+        console.log('🛑 Web recording stopped');
+        const videoBlob = new Blob(chunks, { type: mediaRecorder?.mimeType || 'video/webm' });
+        console.log(`📁 Created video blob: ${videoBlob.size} bytes`);
+        onRecordingComplete(videoBlob);
+      };
+
+      mediaRecorder.onerror = (event) => {
+        console.error('❌ MediaRecorder error:', event);
+      };
+
+      mediaRecorder.start(1000); // Collect data every second
+      mediaRecorderRef.current = mediaRecorder;
+      console.log('✅ Web recording started');
+    } catch (error) {
+      console.error('❌ Failed to start recording:', error);
+      setError('Failed to start recording. Please try again.');
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      console.log('🛑 Stopping web recording...');
+      mediaRecorderRef.current.stop();
+      mediaRecorderRef.current = null;
+    }
+  };
+
+  const cleanup = () => {
+    console.log('🧹 Cleaning up camera resources...');
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => {
+        track.stop();
+        console.log(`🛑 Stopped track: ${track.kind}`);
+      });
+      streamRef.current = null;
+    }
+    if (mediaRecorderRef.current) {
+      mediaRecorderRef.current = null;
+    }
+  };
+
+  if (Platform.OS !== 'web') {
+    return null;
+  }
+
+  // Show error state
+  if (error) {
+    return (
+      <View style={styles.errorContainer}>
+        <Text style={styles.errorTitle}>Camera Error</Text>
+        <Text style={styles.errorMessage}>{error}</Text>
+        <Text style={styles.errorHint}>
+          Troubleshooting tips:{'\n'}
+          • Check camera permissions in browser settings{'\n'}
+          • Ensure no other apps are using the camera{'\n'}
+          • Try refreshing the page{'\n'}
+          • Use Chrome, Firefox, or Safari for best results
+        </Text>
+      </View>
+    );
+  }
+
+  // Show loading state
+  if (isInitializing || !hasPermission) {
+    return (
+      <View style={styles.loadingContainer}>
+        <Text style={styles.loadingText}>
+          {isInitializing ? 'Initializing camera...' : 'Waiting for camera...'}
+        </Text>
+        {debugInfo && (
+          <Text style={styles.debugText}>{debugInfo}</Text>
+        )}
+        {/* Manual retry button if stuck */}
+        {isInitializing && (
+          <Text 
+            style={styles.retryButton}
+            onPress={() => {
+              console.log('🔄 Manual retry triggered');
+              setIsInitializing(false);
+              setTimeout(() => initializeCamera(), 100);
+            }}
+          >
+            Tap to retry
+          </Text>
+        )}
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+      <video
+        ref={videoRef}
+        style={styles.video}
+        autoPlay
+        muted
+        playsInline
+      />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  video: {
+    width: '100%',
+    height: '100%',
+    objectFit: 'cover',
+  } as any,
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+    backgroundColor: '#f8f8f8',
+  },
+  errorTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#d32f2f',
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  errorMessage: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 15,
+  },
+  errorHint: {
+    fontSize: 14,
+    color: '#888',
+    textAlign: 'left',
+    lineHeight: 20,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f0f0f0',
+  },
+  loadingText: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+  },
+  debugText: {
+    fontSize: 14,
+    color: '#888',
+    textAlign: 'center',
+    marginTop: 10,
+    fontStyle: 'italic',
+  },
+  retryButton: {
+    fontSize: 16,
+    color: '#00CFFF',
+    textAlign: 'center',
+    marginTop: 20,
+    textDecorationLine: 'underline',
+    cursor: 'pointer',
+  } as any,
+});
+
+// File: components/FeebCamera.tsx
+import React, { useEffect, useRef, useState } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
+import type { CameraRecordingOptions } from 'expo-camera';
+import { Ionicons } from '@expo/vector-icons';
+
+export default function FeebCamera() {
+  const [permission, requestPermission] = useCameraPermissions();
+  const [isRecording, setIsRecording] = useState(false);
+  const cameraRef = useRef<CameraView | null>(null);
+
+  const handleRecord = async () => {
+    if (!cameraRef.current) return;
+
+    if (isRecording) {
+      cameraRef.current.stopRecording();
+      setIsRecording(false);
+    } else {
+      setIsRecording(true);
+      try {
+        const recordingOptions: CameraRecordingOptions = {
+          // You can add options here if needed
+        };
+        const video = await cameraRef.current.recordAsync(recordingOptions);
+      } catch (error) {
+        console.error('Recording failed:', error);
+      } finally {
+        setIsRecording(false);
+      }
+    }
+  };
+
+  if (!permission) {
+    // Camera permissions are still loading
+    return <Text>Loading...</Text>;
+  }
+
+  if (!permission.granted) {
+    // Camera permissions are not granted yet
+    return (
+      <View style={styles.container}>
+        <Text style={styles.message}>We need your permission to show the camera</Text>
+        <TouchableOpacity onPress={requestPermission} style={styles.permissionButton}>
+          <Text style={styles.permissionButtonText}>Grant Permission</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  return (
+    <View style={{ flex: 1 }}>
+      <CameraView
+        ref={cameraRef}
+        style={{ flex: 1 }}
+        facing="front"
+        mode="video"
+      >
+        <TouchableOpacity style={styles.button} onPress={handleRecord}>
+          <Ionicons
+            name={isRecording ? 'square' : 'videocam'}
+            size={32}
+            color="white"
+          />
+        </TouchableOpacity>
+      </CameraView>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  message: {
+    textAlign: 'center',
+    marginBottom: 20,
+    fontSize: 16,
+  },
+  permissionButton: {
+    backgroundColor: '#00CFFF',
+    padding: 12,
+    borderRadius: 8,
+  },
+  permissionButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  button: {
+    position: 'absolute',
+    bottom: 40,
+    alignSelf: 'center',
+    backgroundColor: '#00CFFF',
+    padding: 14,
+    borderRadius: 40,
+  },
+});
+
+// File: .expo/README.md
+> Why do I have a folder named ".expo" in my project?
+The ".expo" folder is created when an Expo project is started using "expo start" command.
+> What do the files contain?
+- "devices.json": contains information about devices that have recently opened this project. This is used to populate the "Development sessions" list in your development builds.
+- "settings.json": contains the server configuration that is used to serve the application manifest.
+> Should I commit the ".expo" folder?
+No, you should not share the ".expo" folder. It does not contain any information that is relevant for other developers working on the project, it is specific to your machine.
+Upon project creation, the ".expo" folder is already added to your ".gitignore" file.
+
+
+// File: screens/ChatsScreen.tsx
+import { View, Text, FlatList, StyleSheet, Image } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+
+const chats = [
+  {
+    id: '1',
+    name: 'Floyd Miles',
+    message: 'You have to see that feeb pleaaaase open it 😂',
+    time: '1 min ago',
+    avatar: 'https://randomuser.me/api/portraits/men/1.jpg',
+  },
+  {
+    id: '2',
+    name: 'Kristin Watson',
+    message: '📽️ Sent you a feeb',
+    time: '8:24 p.m.',
+    avatar: 'https://randomuser.me/api/portraits/women/2.jpg',
+  },
+  {
+    id: '3',
+    name: 'Ralph Edwards',
+    message: 'Ok!',
+    time: '4:34 p.m.',
+    avatar: 'https://randomuser.me/api/portraits/men/3.jpg',
+  },
+];
+
+export default function ChatsScreen() {
+  return (
+    <View style={{ flex: 1, backgroundColor: '#fff' }}>
+      <Text style={styles.title}>Chats</Text>
+      <FlatList
+        data={chats}
+        keyExtractor={(item) => item.id}
+        renderItem={({ item }) => (
+          <View style={styles.item}>
+            <Image source={{ uri: item.avatar }} style={styles.avatar} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.name}>{item.name}</Text>
+              <Text style={styles.message}>{item.message}</Text>
+            </View>
+            <View style={styles.meta}>
+              <Text style={styles.time}>{item.time}</Text>
+              <Ionicons name="chevron-forward" size={18} color="#aaa" />
+            </View>
+          </View>
+        )}
+      />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  title: {
+    fontSize: 28,
+    fontWeight: '700',
+    marginTop: 50,
+    marginBottom: 20,
+    marginLeft: 20,
+  },
+  item: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomColor: '#eee',
+    borderBottomWidth: 1,
+  },
+  avatar: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    marginRight: 12,
+  },
+  name: {
+    fontWeight: '600',
+    fontSize: 16,
+  },
+  message: {
+    color: '#666',
+  },
+  time: {
+    fontSize: 12,
+    color: '#aaa',
+    marginBottom: 4,
+  },
+  meta: {
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+  },
+});
+
+// File: screens/ProfileScreen.tsx
+// File: screens/ProfileScreen.tsx
+import React, { useState, useEffect, useCallback } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  Image,
+  TouchableOpacity,
+  Dimensions,
+  FlatList,
+  Alert,
+  Platform,
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { Video, ResizeMode } from "expo-av";
+import { useFocusEffect } from "@react-navigation/native";
+import { FeebStorage, Feeb } from "../utils/FeebStorage";
+
+const screenWidth = Dimensions.get("window").width;
+const SPACING = 8;
+const COLUMN_COUNT = 2;
+const ITEM_SIZE = (screenWidth - SPACING * (COLUMN_COUNT + 1)) / COLUMN_COUNT;
+
+// User data (in real app, this would come from auth/user context)
+const user = {
+  avatarUri: "https://randomuser.me/api/portraits/women/44.jpg",
+  name: "Lindsey Horan",
+  handle: "@linHoran",
+  followers: "87k",
+  following: "42k",
+  likes: "12.3k",
+};
+
+// Sample content data (different structure from Feeb)
+interface ContentItem {
+  id: string;
+  uri: string;
+}
+
+const sampleContents: ContentItem[] = [
+  { id: "c1", uri: "https://placekitten.com/304/304" },
+  { id: "c2", uri: "https://placekitten.com/305/305" },
+  { id: "c3", uri: "https://placekitten.com/306/306" },
+  { id: "c4", uri: "https://placekitten.com/307/307" },
+];
+
+interface FeebItemState {
+  id: string;
+  displayUri: string;
+  loading: boolean;
+  error: boolean;
+}
+
+export default function ProfileScreen() {
+  const [activeTab, setActiveTab] = useState<"Feebs" | "Contents">("Feebs");
+  const [userFeebs, setUserFeebs] = useState<Feeb[]>([]);
+  const [feebDisplayStates, setFeebDisplayStates] = useState<FeebItemState[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Load feebs when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      loadUserFeebs();
+    }, [])
+  );
+
+  const loadUserFeebs = async () => {
+    try {
+      setLoading(true);
+      const feebs = await FeebStorage.getAllFeebs();
+      setUserFeebs(feebs);
+      console.log(`📱 Loaded ${feebs.length} feebs from storage`);
+      
+      // Load display URIs for web feebs
+      await loadFeebDisplayUris(feebs);
+    } catch (error) {
+      console.error("Error loading feebs:", error);
+      Alert.alert("Error", "Failed to load your feebs");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadFeebDisplayUris = async (feebs: Feeb[]) => {
+    console.log('🖼️ Loading display URIs for feebs...');
+    
+    const displayStates: FeebItemState[] = await Promise.all(
+      feebs.map(async (feeb) => {
+        const state: FeebItemState = {
+          id: feeb.id,
+          displayUri: feeb.uri,
+          loading: false,
+          error: false
+        };
+
+        try {
+          if (Platform.OS === 'web' && feeb.isWebBlob) {
+            console.log(`🔍 Loading display URI for web feeb: ${feeb.id}`);
+            state.loading = true;
+            
+            const displayUri = await FeebStorage.getFeebDisplayUri(feeb);
+            state.loading = false;
+            
+            if (displayUri && displayUri.length > 0) {
+              state.displayUri = displayUri;
+              console.log(`✅ Display URI loaded for ${feeb.id}: Success`);
+            } else {
+              console.log(`❌ Display URI failed for ${feeb.id}: Empty or invalid`);
+              state.error = true;
+              state.displayUri = '';
+            }
+          }
+        } catch (error) {
+          console.error(`❌ Error loading display URI for feeb ${feeb.id}:`, error);
+          state.error = true;
+          state.loading = false;
+          state.displayUri = '';
+        }
+
+        return state;
+      })
+    );
+
+    setFeebDisplayStates(displayStates);
+  };
+
+  const getFeebDisplayState = (feebId: string): FeebItemState | undefined => {
+    return feebDisplayStates.find(state => state.id === feebId);
+  };
+
+  const handleDeleteFeeb = async (feebId: string) => {
+    Alert.alert(
+      "Delete Feeb",
+      "Are you sure you want to delete this feeb?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await FeebStorage.deleteFeeb(feebId);
+              await loadUserFeebs(); // Reload the list
+              Alert.alert("Success", "Feeb deleted successfully");
+            } catch (error) {
+              console.error("Error deleting feeb:", error);
+              Alert.alert("Error", "Failed to delete feeb");
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleCleanupInvalidFeebs = async () => {
+    Alert.alert(
+      "Clean Up Invalid Videos",
+      "This will remove feebs that can no longer be displayed. Continue?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Clean Up",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              const invalidFeebIds = feebDisplayStates
+                .filter(state => state.error)
+                .map(state => state.id);
+              
+              for (const feebId of invalidFeebIds) {
+                await FeebStorage.deleteFeeb(feebId);
+              }
+              
+              await loadUserFeebs(); // Reload the list
+              Alert.alert("Success", `Cleaned up ${invalidFeebIds.length} invalid feebs`);
+            } catch (error) {
+              console.error("Error cleaning up feebs:", error);
+              Alert.alert("Error", "Failed to clean up feebs");
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const renderFeebItem = ({ item }: { item: Feeb }) => {
+    const displayState = getFeebDisplayState(item.id);
+    const isWebVideo = Platform.OS === 'web' && item.isWebBlob;
+    
+    // Show loading state for web videos that are still loading
+    if (isWebVideo && displayState?.loading) {
+      return (
+        <View style={[styles.gridItem, styles.loadingItem]}>
+          <Text style={styles.loadingText}>Loading...</Text>
+        </View>
+      );
+    }
+
+    // Show error state for failed loads
+    if (displayState?.error) {
+      return (
+        <TouchableOpacity 
+          style={[styles.gridItem, styles.errorItem]}
+          onPress={() => handleDeleteFeeb(item.id)}
+          onLongPress={() => handleDeleteFeeb(item.id)}
+        >
+          <Ionicons name="warning" size={24} color="#ff6b6b" />
+          <Text style={styles.errorText}>Invalid Video</Text>
+          <Text style={styles.errorSubtext}>Tap to delete</Text>
+        </TouchableOpacity>
+      );
+    }
+
+    const displayUri = displayState?.displayUri || item.uri;
+
+    return (
+      <TouchableOpacity 
+        style={styles.gridItem}
+        onLongPress={() => handleDeleteFeeb(item.id)}
+      >
+        {isWebVideo && displayUri.startsWith('data:') ? (
+          // For web data URLs, use video element directly
+          <video
+            src={displayUri}
+            style={styles.gridVideoWeb as any}
+            muted
+            loop
+            onMouseEnter={(e) => {
+              const video = e.target as HTMLVideoElement;
+              video.currentTime = 0;
+              video.play().catch(console.log);
+            }}
+            onMouseLeave={(e) => {
+              const video = e.target as HTMLVideoElement;
+              video.pause();
+            }}
+            onError={(e) => {
+              console.error('Video element error for feeb:', item.id, e);
+            }}
+          />
+        ) : (
+          // For mobile or regular URIs, use Video component
+          <Video
+            source={{ uri: displayUri }}
+            style={styles.gridVideo}
+            resizeMode={ResizeMode.COVER}
+            shouldPlay={false}
+            isLooping={false}
+            isMuted={true}
+            onError={(error) => {
+              console.error('Video component error for feeb:', item.id, error);
+            }}
+          />
+        )}
+        <View style={styles.feebOverlay}>
+          <Ionicons name="videocam" size={20} color="white" />
+        </View>
+        <View style={styles.feebInfo}>
+          <Text style={styles.feebDate}>
+            {new Date(item.createdAt).toLocaleDateString()}
+          </Text>
+          {isWebVideo && (
+            <Text style={styles.feebPlatform}>Web</Text>
+          )}
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
+  const renderContentItem = ({ item }: { item: ContentItem }) => (
+    <View style={styles.gridItem}>
+      <Image source={{ uri: item.uri }} style={styles.gridImage} />
+      <View style={styles.playIcon}>
+        <Ionicons name="play-circle" size={24} color="white" />
+      </View>
+    </View>
+  );
+
+  const renderHeader = () => (
+    <View style={styles.headerContainer}>
+      <Text style={styles.title}>My profile</Text>
+      
+      {/* User Avatar */}
+      <Image source={{ uri: user.avatarUri }} style={styles.avatar} />
+      <Text style={styles.name}>{user.name}</Text>
+      <Text style={styles.handle}>{user.handle}</Text>
+
+      {/* Stats Row */}
+      <View style={styles.statsRow}>
+        <View style={styles.stat}>
+          <Text style={styles.statValue}>{user.followers}</Text>
+          <Text style={styles.statLabel}>Followers</Text>
+        </View>
+        <View style={styles.stat}>
+          <Text style={styles.statValue}>{user.following}</Text>
+          <Text style={styles.statLabel}>Following</Text>
+        </View>
+        <View style={styles.stat}>
+          <Text style={styles.statValue}>{userFeebs.length}</Text>
+          <Text style={styles.statLabel}>Feebs</Text>
+        </View>
+      </View>
+
+      {/* Edit Button */}
+      <TouchableOpacity style={styles.editButton}>
+        <Text style={styles.editButtonText}>Edit profile</Text>
+        <Ionicons name="pencil" size={20} color="#00CFFF" />
+      </TouchableOpacity>
+
+      {/* Cleanup button for invalid feebs */}
+      {Platform.OS === 'web' && feebDisplayStates.some(state => state.error) && (
+        <TouchableOpacity style={styles.cleanupButton} onPress={handleCleanupInvalidFeebs}>
+          <Text style={styles.cleanupButtonText}>Clean up invalid videos</Text>
+          <Ionicons name="trash" size={16} color="#ff6b6b" />
+        </TouchableOpacity>
+      )}
+
+      {/* Tab Row */}
+      <View style={styles.tabRow}>
+        {(["Feebs", "Contents"] as const).map((tab) => (
+          <TouchableOpacity
+            key={tab}
+            style={styles.tabButton}
+            onPress={() => setActiveTab(tab)}
+          >
+            <Text
+              style={[
+                styles.tabText,
+                activeTab === tab && styles.tabTextActive,
+              ]}
+            >
+              {tab} {tab === "Feebs" && `(${userFeebs.length})`}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+      
+      {/* Divider */}
+      <View style={styles.dividerRow}>
+        <View
+          style={[
+            styles.divider,
+            activeTab === "Feebs" && styles.dividerActive,
+          ]}
+        />
+        <View
+          style={[
+            styles.divider,
+            activeTab === "Contents" && styles.dividerActive,
+          ]}
+        />
+      </View>
+    </View>
+  );
+
+  const renderEmptyState = () => (
+    <View style={styles.emptyState}>
+      <Ionicons name="videocam-outline" size={64} color="#ccc" />
+      <Text style={styles.emptyTitle}>No feebs yet</Text>
+      <Text style={styles.emptySubtitle}>
+        Record your first reaction to get started!
+      </Text>
+    </View>
+  );
+
+  if (loading && activeTab === "Feebs") {
+    return (
+      <View style={styles.loadingContainer}>
+        <Text>Loading your feebs...</Text>
+      </View>
+    );
+  }
+
+  return (
+    <>
+      {activeTab === "Feebs" ? (
+        <FlatList
+          data={userFeebs}
+          keyExtractor={(item) => item.id}
+          numColumns={COLUMN_COUNT}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.listContent}
+          ListHeaderComponent={renderHeader}
+          ListEmptyComponent={renderEmptyState}
+          renderItem={renderFeebItem}
+        />
+      ) : (
+        <FlatList
+          data={sampleContents}
+          keyExtractor={(item) => item.id}
+          numColumns={COLUMN_COUNT}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.listContent}
+          ListHeaderComponent={renderHeader}
+          renderItem={renderContentItem}
+        />
+      )}
+    </>
+  );
+}
+
+const styles = StyleSheet.create({
+  listContent: {
+    padding: SPACING,
+    backgroundColor: "#fff",
+  },
+  headerContainer: {
+    padding: SPACING,
+    paddingBottom: SPACING * 2,
+    backgroundColor: "#fff",
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: "700",
+  },
+  avatar: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    alignSelf: "center",
+    marginTop: SPACING,
+  },
+  name: {
+    fontSize: 22,
+    fontWeight: "600",
+    textAlign: "center",
+    marginTop: SPACING / 2,
+  },
+  handle: {
+    fontSize: 14,
+    color: "#888",
+    textAlign: "center",
+    marginBottom: SPACING,
+  },
+  statsRow: {
+    flexDirection: "row",
+    justifyContent: "space-around",
+    marginBottom: SPACING,
+  },
+  stat: { alignItems: "center" },
+  statValue: { fontSize: 18, fontWeight: "600" },
+  statLabel: { fontSize: 12, color: "#aaa" },
+  editButton: {
+    flexDirection: "row",
+    alignSelf: "center",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#00CFFF",
+    borderRadius: 24,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    marginBottom: SPACING * 2,
+  },
+  editButtonText: {
+    color: "#00CFFF",
+    fontSize: 16,
+    fontWeight: "600",
+    marginRight: 8,
+  },
+  tabRow: {
+    flexDirection: "row",
+    justifyContent: "space-around",
+    marginBottom: SPACING / 2,
+  },
+  tabButton: { flex: 1, alignItems: "center", paddingVertical: 8 },
+  tabText: { fontSize: 16, color: "#888" },
+  tabTextActive: { color: "#000", fontWeight: "700" },
+  dividerRow: {
+    flexDirection: "row",
+    height: 2,
+    marginBottom: SPACING * 1.5,
+  },
+  divider: { flex: 1, backgroundColor: "transparent" },
+  dividerActive: { backgroundColor: "#000" },
+  
+  // Grid items
+  gridItem: {
+    width: ITEM_SIZE,
+    height: ITEM_SIZE,
+    margin: SPACING / 2,
+    borderRadius: 12,
+    overflow: "hidden",
+    backgroundColor: "#000",
+    position: "relative",
+  },
+  gridImage: {
+    width: "100%",
+    height: "100%",
+    resizeMode: "cover",
+  },
+  gridVideo: {
+    width: "100%",
+    height: "100%",
+  },
+  gridVideoWeb: {
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+  },
+  playIcon: {
+    position: "absolute",
+    top: 8,
+    right: 8,
+  },
+  feebOverlay: {
+    position: "absolute",
+    top: 8,
+    left: 8,
+    backgroundColor: "rgba(0, 207, 255, 0.8)",
+    borderRadius: 12,
+    padding: 4,
+  },
+  feebInfo: {
+    position: "absolute",
+    bottom: 4,
+    left: 4,
+    right: 4,
+  },
+  feebDate: {
+    color: "white",
+    fontSize: 10,
+    textShadowColor: "rgba(0, 0, 0, 0.7)",
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
+  },
+  feebPlatform: {
+    color: "white",
+    fontSize: 8,
+    opacity: 0.8,
+    textShadowColor: "rgba(0, 0, 0, 0.7)",
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
+  },
+  
+  // Loading and error states
+  loadingItem: {
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#f0f0f0",
+  },
+  loadingText: {
+    color: "#666",
+    fontSize: 12,
+  },
+  errorItem: {
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#ffebee",
+  },
+  errorText: {
+    color: "#d32f2f",
+    fontSize: 10,
+    marginTop: 4,
+    textAlign: "center",
+    fontWeight: "bold",
+  },
+  errorSubtext: {
+    color: "#d32f2f",
+    fontSize: 8,
+    marginTop: 2,
+    textAlign: "center",
+    opacity: 0.8,
+  },
+  
+  // Cleanup button
+  cleanupButton: {
+    flexDirection: "row",
+    alignSelf: "center",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#ff6b6b",
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    marginBottom: SPACING,
+  },
+  cleanupButtonText: {
+    color: "#ff6b6b",
+    fontSize: 12,
+    fontWeight: "600",
+    marginRight: 6,
+  },
+  
+  // Empty state
+  emptyState: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 40,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#666",
+    marginTop: 16,
+  },
+  emptySubtitle: {
+    fontSize: 14,
+    color: "#aaa",
+    textAlign: "center",
+    marginTop: 8,
+    paddingHorizontal: 32,
+  },
+  
+  // Loading state
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#fff",
+  },
+});
+
+// File: screens/CreateFeebScreen.tsx
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import FeebCamera from '../components/FeebCamera';
+
+export default function CreateFeebScreen({ navigation }: any) {
+  const [showCamera, setShowCamera] = useState(false);
+
+  if (showCamera) return <FeebCamera />;
+
+  return (
+    <View style={styles.container}>
+      <Text style={styles.title}>Record your Feeb</Text>
+      <TouchableOpacity style={styles.recordButton} onPress={() => setShowCamera(true)}>
+        <Ionicons name="videocam" size={36} color="white" />
+      </TouchableOpacity>
+      <Text style={styles.hint}>Tap to start recording your reaction</Text>
+      <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+        <Ionicons name="arrow-back" size={24} color="#00CFFF" />
+        <Text style={styles.backText}>Back</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,

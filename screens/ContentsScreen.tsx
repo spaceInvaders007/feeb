@@ -9,7 +9,7 @@ import {
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
-import { Video, ResizeMode } from "expo-av";
+import { VideoView, useVideoPlayer } from 'expo-video';
 
 const screenWidth = Dimensions.get("window").width;
 
@@ -25,6 +25,12 @@ export default function ContentsScreen() {
   const thumbnailUri = thumbnailError 
     ? 'https://picsum.photos/640/360' // Fallback to Lorem Picsum
     : 'https://images.unsplash.com/photo-1611162617474-5b21e879e113?w=640&h=360&fit=crop'; // Unsplash video thumbnail
+
+  // Setup video player
+  const player = useVideoPlayer(videoUri, (player) => {
+    player.loop = false;
+    player.muted = false;
+  });
 
   return (
     <View style={styles.container}>
@@ -51,12 +57,12 @@ export default function ContentsScreen() {
           style={styles.videoWrapper}
         >
           {videoStarted ? (
-            <Video
-              source={{ uri: videoUri }}
+            <VideoView
               style={styles.video}
-              useNativeControls
-              resizeMode={ResizeMode.CONTAIN}
-              shouldPlay
+              player={player}
+              allowsFullscreen={true}
+              allowsPictureInPicture={false}
+              showsTimecodes={true}
             />
           ) : (
             <View style={styles.thumbnailContainer}>
@@ -64,6 +70,7 @@ export default function ContentsScreen() {
               <Image 
                 source={{ uri: thumbnailUri }} 
                 style={styles.thumbnail}
+                resizeMode="cover"
                 onError={() => {
                   console.log('Thumbnail failed to load, trying fallback');
                   setThumbnailError(true);
@@ -125,7 +132,6 @@ const styles = StyleSheet.create({
   thumbnail: {
     width: "100%",
     height: "100%",
-    resizeMode: "cover",
   },
   feebOverlay: {
     position: "absolute",

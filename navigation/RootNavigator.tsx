@@ -15,6 +15,11 @@ import RecordReactionScreen from '../screens/RecordReactionScreen';
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 
+// Create a placeholder component instead of inline function
+function UploadPlaceholder() {
+  return null;
+}
+
 function MainTabs({ navigation }: any) {
   return (
     <Tab.Navigator
@@ -37,7 +42,7 @@ function MainTabs({ navigation }: any) {
       <Tab.Screen name="Contents" component={ContentsScreen} />
       <Tab.Screen
         name="Upload"
-        component={() => null}
+        component={UploadPlaceholder}
         options={{
           tabBarIcon: ({ size }) => (
             <Ionicons
