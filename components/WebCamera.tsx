@@ -384,16 +384,6 @@ export default function WebCamera({ isRecording, onCameraReady, onRecordingCompl
         muted
         playsInline
       />
-      
-      {/* Debug info overlay */}
-      {__DEV__ && (
-        <View style={styles.debugOverlay}>
-          <Text style={styles.debugOverlayText}>
-            Recording: {recordingStateRef.current} | 
-            MediaRecorder: {mediaRecorderRef.current?.state || 'none'}
-          </Text>
-        </View>
-      )}
     </View>
   );
 }
@@ -408,20 +398,7 @@ const styles = StyleSheet.create({
     height: '100%',
     objectFit: 'cover',
   } as any,
-  debugOverlay: {
-    position: 'absolute',
-    top: 10,
-    left: 10,
-    right: 10,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    padding: 8,
-    borderRadius: 4,
-  },
-  debugOverlayText: {
-    color: '#fff',
-    fontSize: 10,
-    textAlign: 'center',
-  },
+
   errorContainer: {
     flex: 1,
     justifyContent: 'center',

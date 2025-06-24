@@ -46,31 +46,22 @@ export default function RecordReactionScreen() {
     player.muted = false;
   });
 
-  // Super detailed logging
+  // Simplified logging for production
   const logEverything = useCallback((action: string) => {
-    console.log(`🔍 [${action}] COMPLETE STATE:`, {
-      timestamp: Date.now(),
-      // React states
-      isRecording,
-      videoReady,
-      cameraReady,
-      countdown,
-      hasStartedFlow,
-      isSaving,
-      // Refs
-      isActivelyRecordingRef: isActivelyRecordingRef.current,
-      hasRecordingRef: !!recordingRef.current,
-      hasWebBlob: !!webRecordingBlobRef.current,
-      hasStopTimeout: !!stopTimeoutRef.current,
-      // Player
-      playerDuration: player?.duration || 0,
-      playerCurrentTime: player?.currentTime || 0,
-    });
-  }, [isRecording, videoReady, cameraReady, countdown, hasStartedFlow, isSaving, player]);
+    if (__DEV__) {
+      console.log(`🎬 [${action}]`, {
+        isRecording,
+        isActivelyRecording: isActivelyRecordingRef.current,
+        playerDuration: player?.duration || 0,
+      });
+    }
+  }, [isRecording, player]);
 
-  // Track every render
+  // Track renders only in dev mode
   useEffect(() => {
-    logEverything("RENDER");
+    if (__DEV__) {
+      logEverything("RENDER");
+    }
   });
 
   // Hide header
@@ -336,14 +327,7 @@ export default function RecordReactionScreen() {
         </View>
       )}
 
-      {/* Debug info */}
-      <View style={styles.debugOverlay}>
-        <Text style={styles.debugText}>
-          Recording: {isRecording ? 'TRUE' : 'FALSE'} | 
-          Ref: {isActivelyRecordingRef.current ? 'TRUE' : 'FALSE'} | 
-          Timeout: {stopTimeoutRef.current ? 'SET' : 'NONE'}
-        </Text>
-      </View>
+
     </View>
   );
 }
@@ -396,17 +380,7 @@ const styles = StyleSheet.create({
   loadingText: { color: "#fff", marginTop: 16, fontSize: 16 },
   countdownText: { fontSize: 120, color: "#fff", fontWeight: "bold", textAlign: "center" },
 
-  debugOverlay: {
-    position: "absolute",
-    bottom: 50,
-    left: 20,
-    right: 20,
-    backgroundColor: "rgba(0, 0, 0, 0.9)",
-    padding: 10,
-    borderRadius: 8,
-    zIndex: 1001,
-  },
-  debugText: { color: "#fff", fontSize: 12, textAlign: "center" },
+
 
   permissionContainer: {
     flex: 1,
