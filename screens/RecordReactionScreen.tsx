@@ -127,7 +127,7 @@ export default function RecordReactionScreen() {
     if (shouldStart) {
       DebugLogger.log('FLOW', 'Starting countdown');
       setHasStartedFlow(true);
-      setCountdown(3); // Longer countdown for debugging
+      setCountdown(2);
     }
   }, [videoReady, cameraReady, hasStartedFlow, isRecording, isSaving]);
 
@@ -460,16 +460,6 @@ export default function RecordReactionScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Debug Info Overlay */}
-      <View style={styles.debugInfo}>
-        <Text style={styles.debugText}>
-          Platform: {Platform.OS} | Video: {videoReady ? '✅' : '❌'} | Camera: {cameraReady ? '✅' : '❌'}
-        </Text>
-        <Text style={styles.debugText}>
-          Recording: {isRecording ? '🔴' : '⚫'} | Saving: {isSaving ? '💾' : '⚫'}
-        </Text>
-      </View>
-
       {/* Back button */}
       <TouchableOpacity
         style={styles.backButton}
@@ -553,23 +543,6 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#000" },
   half: { flex: 1, overflow: "hidden", backgroundColor: "#000" },
   video: { flex: 1, width: screenWidth, backgroundColor: "#000" },
-
-  debugInfo: {
-    position: "absolute",
-    top: 100,
-    left: 10,
-    right: 10,
-    backgroundColor: "rgba(0, 0, 0, 0.8)",
-    padding: 8,
-    borderRadius: 4,
-    zIndex: 1001,
-  },
-  debugText: {
-    color: "#00FF00",
-    fontSize: 10,
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
-  },
-
   backButton: { position: "absolute", top: 50, left: 20, zIndex: 1000 },
   backButtonCircle: {
     width: 40,
