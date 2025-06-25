@@ -11,9 +11,9 @@ import {
   Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { VideoView, useVideoPlayer } from 'expo-video';
 import { useFocusEffect } from "@react-navigation/native";
 import { FeebStorage, Feeb } from "../utils/FeebStorage";
+import SideBySidePlayer from "../components/SideBySidePlayer";
 
 const screenWidth = Dimensions.get("window").width;
 const SPACING = 8;
@@ -50,11 +50,199 @@ interface FeebItemState {
   error: boolean;
 }
 
+// Fullscreen Video Modal Component - Now using SideBySidePlayer
+function FullscreenVideoModal({ 
+  visible, 
+  feeb, 
+  onClose 
+}: { 
+  visible: boolean; 
+  feeb: (Feeb & { displayUri?: string }) | null; 
+  onClose: () => void;
+}) {
+  if (!visible || !feeb) return null;
+
+  // Debug logging for SideBySidePlayer
+  console.log('🎬 FullscreenVideoModal - Opening with:', {
+    originalVideoUri: feeb.originalVideoUri,
+    reactionVideoUri: feeb.displayUri || feeb.uri,
+    feebId: feeb.id,
+    isWebBlob: feeb.isWebBlob
+  });
+
+  return (
+    <SideBySidePlayer
+      visible={visible}
+      originalVideoUri={feeb.originalVideoUri}
+      reactionVideoUri={feeb.displayUri || feeb.uri}
+      onClose={onClose}
+      feebId={feeb.id}
+      createdAt={feeb.createdAt}
+      isWebBlob={feeb.isWebBlob}
+    />
+  );
+}
+
+// Feeb Video Component for grid
+function FeebVideoGridItem({ 
+  feeb, 
+  displayState, 
+  onPress, 
+  onLongPress 
+}: { 
+  feeb: Feeb; 
+  displayState?: FeebItemState; 
+  onPress: () => void; 
+  onLongPress: () => void;
+}) {
+  const isWebVideo = Platform.OS === 'web' && feeb.isWebBlob;
+  const displayUri = displayState?.displayUri || feeb.uri;
+
+  // Show loading state for web videos that are still loading
+  if (isWebVideo && displayState?.loading) {
+    return (
+      <TouchableOpacity style={[styles.gridItem, styles.loadingItem]} onPress={onPress}>
+        <Text style={styles.loadingText}>Loading...</Text>
+      </TouchableOpacity>
+    );
+  }
+
+  // Show error state for failed loads
+  if (displayState?.error) {
+    return (
+      <TouchableOpacity 
+        style={[styles.gridItem, styles.errorItem]}
+        onPress={onLongPress}
+        onLongPress={onLongPress}
+      >
+        <Ionicons name="warning" size={24} color="#ff6b6b" />
+        <Text style={styles.errorText}>Invalid Video</Text>
+        <Text style={styles.errorSubtext}>Tap to delete</Text>
+      </TouchableOpacity>
+    );
+  }
+
+  return (
+    <TouchableOpacity 
+      style={styles.gridItem}
+      onPress={onPress}
+      onLongPress={onLongPress}
+      activeOpacity={0.8}
+    >
+      {/* Video Preview */}
+      <View style={styles.videoContainer}>
+        {isWebVideo && displayUri.startsWith('data:') ? (
+          // For web data URLs, use video element
+          <video
+            src={displayUri}
+            style={styles.gridVideoWeb as any}
+            muted
+            loop
+            preload="metadata"
+            onMouseEnter={(e) => {
+              const video = e.target as HTMLVideoElement;
+              video.currentTime = 0;
+              video.play().catch(console.log);
+            }}
+            onMouseLeave={(e) => {
+              const video = e.target as HTMLVideoElement;
+              video.pause();
+            }}
+            onError={(e) => {
+              console.error('Grid video error for feeb:', feeb.id, e);
+            }}
+          />
+        ) : (
+          // For mobile or regular URIs, use simple preview
+          <View style={styles.videoPlaceholder}>
+            <Ionicons name="videocam" size={32} color="#666" />
+            <Text style={styles.videoPlaceholderText}>Tap to play</Text>
+          </View>
+        )}
+      </View>
+
+      {/* Play Button Overlay */}
+      <View style={styles.playButtonOverlay}>
+        <View style={styles.playButtonCircle}>
+          <Ionicons name="play" size={20} color="white" />
+        </View>
+      </View>
+
+      {/* Video Info Overlay */}
+      <View style={styles.videoInfoOverlay}>
+        <View style={styles.videoTypeIcon}>
+          <Ionicons name="videocam" size={16} color="white" />
+        </View>
+        <Text style={styles.videoDate}>
+          {new Date(feeb.createdAt).toLocaleDateString()}
+        </Text>
+        {isWebVideo && (
+          <Text style={styles.videoPlatform}>Web</Text>
+        )}
+      </View>
+    </TouchableOpacity>
+  );
+}
+
 export default function ProfileScreen() {
   const [activeTab, setActiveTab] = useState<"Feebs" | "Contents">("Feebs");
   const [userFeebs, setUserFeebs] = useState<Feeb[]>([]);
   const [feebDisplayStates, setFeebDisplayStates] = useState<FeebItemState[]>([]);
   const [loading, setLoading] = useState(true);
+  const [fullscreenFeeb, setFullscreenFeeb] = useState<(Feeb & { displayUri?: string }) | null>(null);
+
+  // DEBUG FUNCTION - Check what's actually being saved
+  const debugFeebFiles = async () => {
+    console.log('🔍 ======= FEEB DEBUG START =======');
+    
+    try {
+      const feebs = await FeebStorage.getAllFeebs();
+      console.log(`🔍 Found ${feebs.length} feebs`);
+      
+      for (let i = 0; i < feebs.length; i++) {
+        const feeb = feebs[i];
+        console.log(`🔍 FEEB ${i + 1}:`, {
+          id: feeb.id,
+          uri: feeb.uri,
+          originalVideoUri: feeb.originalVideoUri,
+          isWebBlob: feeb.isWebBlob,
+          createdAt: feeb.createdAt
+        });
+        
+        // Check if it's a web blob
+        if (Platform.OS === 'web' && feeb.isWebBlob) {
+          try {
+            console.log('🔍 Getting display URI for web feeb...');
+            const displayUri = await FeebStorage.getFeebDisplayUri(feeb);
+            
+            if (displayUri) {
+              console.log('🔍 Display URI: SUCCESS');
+              console.log('🔍 URI length:', displayUri.length);
+              console.log('🔍 URI starts with:', displayUri.substring(0, 50));
+              console.log('🔍 URI type:', displayUri.startsWith('data:') ? 'DATA_URL' : 'OTHER');
+            } else {
+              console.log('🔍 Display URI: FAILED - empty or null');
+            }
+          } catch (error) {
+            console.log('🔍 Error getting display URI:', error);
+          }
+        }
+        
+        console.log('🔍 -------------------------');
+      }
+      
+      Alert.alert(
+        'Debug Info', 
+        `Found ${feebs.length} feebs. Check console for details.`
+      );
+      
+    } catch (error) {
+      console.error('🔍 Error in debug:', error);
+      Alert.alert('Debug Error', error.message);
+    }
+    
+    console.log('🔍 ======= FEEB DEBUG END =======');
+  };
 
   // Load feebs when screen comes into focus
   useFocusEffect(
@@ -127,6 +315,44 @@ export default function ProfileScreen() {
     return feebDisplayStates.find(state => state.id === feebId);
   };
 
+  const handlePlayFeeb = async (feeb: Feeb) => {
+    try {
+      console.log('🎬 Playing feeb:', feeb.id);
+      
+      let playableUri = feeb.uri;
+      
+      // For web videos, get the display URI
+      if (Platform.OS === 'web' && feeb.isWebBlob) {
+        const displayState = getFeebDisplayState(feeb.id);
+        if (displayState?.displayUri) {
+          playableUri = displayState.displayUri;
+        } else {
+          console.log('Loading display URI for playback...');
+          playableUri = await FeebStorage.getFeebDisplayUri(feeb);
+        }
+      }
+      
+      if (!playableUri) {
+        Alert.alert('Error', 'Video could not be loaded');
+        return;
+      }
+      
+      console.log('🎬 Setting fullscreen feeb with URIs:', {
+        originalVideoUri: feeb.originalVideoUri,
+        reactionVideoUri: playableUri
+      });
+      
+      setFullscreenFeeb({
+        ...feeb,
+        displayUri: playableUri
+      });
+      
+    } catch (error) {
+      console.error('Error playing feeb:', error);
+      Alert.alert('Error', 'Failed to play video');
+    }
+  };
+
   const handleDeleteFeeb = async (feebId: string) => {
     Alert.alert(
       "Delete Feeb",
@@ -184,75 +410,14 @@ export default function ProfileScreen() {
 
   const renderFeebItem = ({ item }: { item: Feeb }) => {
     const displayState = getFeebDisplayState(item.id);
-    const isWebVideo = Platform.OS === 'web' && item.isWebBlob;
     
-    // Show loading state for web videos that are still loading
-    if (isWebVideo && displayState?.loading) {
-      return (
-        <View style={[styles.gridItem, styles.loadingItem]}>
-          <Text style={styles.loadingText}>Loading...</Text>
-        </View>
-      );
-    }
-
-    // Show error state for failed loads
-    if (displayState?.error) {
-      return (
-        <TouchableOpacity 
-          style={[styles.gridItem, styles.errorItem]}
-          onPress={() => handleDeleteFeeb(item.id)}
-          onLongPress={() => handleDeleteFeeb(item.id)}
-        >
-          <Ionicons name="warning" size={24} color="#ff6b6b" />
-          <Text style={styles.errorText}>Invalid Video</Text>
-          <Text style={styles.errorSubtext}>Tap to delete</Text>
-        </TouchableOpacity>
-      );
-    }
-
-    const displayUri = displayState?.displayUri || item.uri;
-
     return (
-      <TouchableOpacity 
-        style={styles.gridItem}
+      <FeebVideoGridItem
+        feeb={item}
+        displayState={displayState}
+        onPress={() => handlePlayFeeb(item)}
         onLongPress={() => handleDeleteFeeb(item.id)}
-      >
-        {isWebVideo && displayUri.startsWith('data:') ? (
-          // For web data URLs, use video element directly
-          <video
-            src={displayUri}
-            style={styles.gridVideoWeb as any}
-            muted
-            loop
-            onMouseEnter={(e) => {
-              const video = e.target as HTMLVideoElement;
-              video.currentTime = 0;
-              video.play().catch(console.log);
-            }}
-            onMouseLeave={(e) => {
-              const video = e.target as HTMLVideoElement;
-              video.pause();
-            }}
-            onError={(e) => {
-              console.error('Video element error for feeb:', item.id, e);
-            }}
-          />
-        ) : (
-          // For mobile or regular URIs, use VideoView component
-          <FeebVideoView uri={displayUri} feebId={item.id} />
-        )}
-        <View style={styles.feebOverlay}>
-          <Ionicons name="videocam" size={20} color="white" />
-        </View>
-        <View style={styles.feebInfo}>
-          <Text style={styles.feebDate}>
-            {new Date(item.createdAt).toLocaleDateString()}
-          </Text>
-          {isWebVideo && (
-            <Text style={styles.feebPlatform}>Web</Text>
-          )}
-        </View>
-      </TouchableOpacity>
+      />
     );
   };
 
@@ -302,6 +467,12 @@ export default function ProfileScreen() {
       <TouchableOpacity style={styles.editButton}>
         <Text style={styles.editButtonText}>Edit profile</Text>
         <Ionicons name="pencil" size={20} color="#00CFFF" />
+      </TouchableOpacity>
+
+      {/* DEBUG BUTTON */}
+      <TouchableOpacity style={styles.debugButton} onPress={debugFeebFiles}>
+        <Text style={styles.debugButtonText}>Debug Feebs</Text>
+        <Ionicons name="bug" size={20} color="#FF6B6B" />
       </TouchableOpacity>
 
       {/* Cleanup button for invalid feebs */}
@@ -369,7 +540,7 @@ export default function ProfileScreen() {
   }
 
   return (
-    <>
+    <View style={styles.container}>
       {activeTab === "Feebs" ? (
         <FlatList
           data={userFeebs}
@@ -392,29 +563,22 @@ export default function ProfileScreen() {
           renderItem={renderContentItem}
         />
       )}
-    </>
-  );
-}
 
-// Separate component for feeb videos to handle video player properly
-function FeebVideoView({ uri, feebId }: { uri: string; feebId: string }) {
-  const player = useVideoPlayer(uri, (player) => {
-    player.loop = false;
-    player.muted = true;
-  });
-
-  return (
-    <VideoView
-      style={styles.gridVideo}
-      player={player}
-      allowsFullscreen={false}
-      allowsPictureInPicture={false}
-      showsTimecodes={false}
-    />
+      {/* Fullscreen Video Modal */}
+      <FullscreenVideoModal
+        visible={!!fullscreenFeeb}
+        feeb={fullscreenFeeb}
+        onClose={() => setFullscreenFeeb(null)}
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: "#fff",
+  },
   listContent: {
     padding: SPACING,
     backgroundColor: "#fff",
@@ -472,6 +636,24 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     marginRight: 8,
   },
+  debugButton: {
+    flexDirection: "row",
+    alignSelf: "center",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#FF6B6B",
+    borderRadius: 24,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    marginBottom: SPACING * 2,
+    backgroundColor: "rgba(255, 107, 107, 0.1)",
+  },
+  debugButtonText: {
+    color: "#FF6B6B",
+    fontSize: 16,
+    fontWeight: "600",
+    marginRight: 8,
+  },
   tabRow: {
     flexDirection: "row",
     justifyContent: "space-around",
@@ -495,55 +677,88 @@ const styles = StyleSheet.create({
     margin: SPACING / 2,
     borderRadius: 12,
     overflow: "hidden",
-    backgroundColor: "#000",
+    backgroundColor: "#f0f0f0",
     position: "relative",
   },
   gridImage: {
     width: "100%",
     height: "100%",
   },
-  gridVideo: {
+  
+  // Video Container
+  videoContainer: {
     width: "100%",
     height: "100%",
+    backgroundColor: "#000",
   },
   gridVideoWeb: {
     width: "100%",
     height: "100%",
     objectFit: "cover",
   },
-  playIcon: {
-    position: "absolute",
-    top: 8,
-    right: 8,
+  videoPlaceholder: {
+    width: "100%",
+    height: "100%",
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#1a1a1a",
   },
-  feebOverlay: {
-    position: "absolute",
-    top: 8,
-    left: 8,
-    backgroundColor: "rgba(0, 207, 255, 0.8)",
-    borderRadius: 12,
-    padding: 4,
+  videoPlaceholderText: {
+    color: "#888",
+    fontSize: 12,
+    marginTop: 8,
   },
-  feebInfo: {
+  
+  // Play Button Overlay
+  playButtonOverlay: {
+    position: "absolute",
+    top: "50%",
+    left: "50%",
+    transform: [{ translateX: -20 }, { translateY: -20 }],
+  },
+  playButtonCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(0, 207, 255, 0.9)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  
+  // Video Info Overlay
+  videoInfoOverlay: {
     position: "absolute",
     bottom: 4,
     left: 4,
     right: 4,
   },
-  feebDate: {
+  videoTypeIcon: {
+    position: "absolute",
+    top: 4,
+    left: 4,
+    backgroundColor: "rgba(0, 207, 255, 0.8)",
+    borderRadius: 8,
+    padding: 2,
+  },
+  videoDate: {
     color: "white",
     fontSize: 10,
     textShadowColor: "rgba(0, 0, 0, 0.7)",
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 2,
   },
-  feebPlatform: {
+  videoPlatform: {
     color: "white",
     fontSize: 8,
     opacity: 0.8,
     textShadowColor: "rgba(0, 0, 0, 0.7)",
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 2,
+  },
+  playIcon: {
+    position: "absolute",
+    top: 8,
+    right: 8,
   },
   
   // Loading and error states

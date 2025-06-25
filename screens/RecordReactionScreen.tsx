@@ -16,8 +16,22 @@ import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { FeebStorage } from "../utils/FeebStorage";
 import WebCamera from "../components/WebCamera";
+import * as FileSystem from 'expo-file-system';
 
 const { width: screenWidth } = Dimensions.get("screen");
+
+// Debug logger utility
+class DebugLogger {
+  static log(category: string, message: string, data?: any) {
+    const timestamp = new Date().toISOString().substr(11, 12);
+    console.log(`[${timestamp}] 🔍 [${category}] ${message}`, data ? JSON.stringify(data, null, 2) : '');
+  }
+
+  static error(category: string, message: string, error?: any) {
+    const timestamp = new Date().toISOString().substr(11, 12);
+    console.error(`[${timestamp}] ❌ [${category}] ${message}`, error);
+  }
+}
 
 export default function RecordReactionScreen() {
   const navigation = useNavigation<any>();
@@ -33,207 +47,401 @@ export default function RecordReactionScreen() {
   const [hasStartedFlow, setHasStartedFlow] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
-  // Refs - simplified approach
+  // Recording refs
   const isActivelyRecordingRef = useRef(false);
-  const recordingRef = useRef<Promise<any> | null>(null);
-  const webRecordingBlobRef = useRef<Blob | null>(null);
   const stopTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const webRecordingBlobRef = useRef<Blob | null>(null);
+  const recordingRef = useRef<Promise<any> | null>(null);
+  const recordingStartTimeRef = useRef<number | null>(null);
 
-  const videoUri = route.params?.videoUri ?? "https://samplelib.com/lib/preview/mp4/sample-5s.mp4";
+  const videoUri = route.params?.videoUri ?? "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4";
 
   const player = useVideoPlayer(videoUri, (player) => {
     player.loop = false;
     player.muted = false;
   });
 
-  // Simplified logging for production
-  const logEverything = useCallback((action: string) => {
-    if (__DEV__) {
-      console.log(`🎬 [${action}]`, {
-        isRecording,
-        isActivelyRecording: isActivelyRecordingRef.current,
-        playerDuration: player?.duration || 0,
-      });
-    }
-  }, [isRecording, player]);
-
-  // Track renders only in dev mode
+  // Enhanced debug logging
   useEffect(() => {
-    if (__DEV__) {
-      logEverything("RENDER");
-    }
+    DebugLogger.log('COMPONENT', 'Render state', {
+      videoReady,
+      cameraReady,
+      isRecording,
+      hasStartedFlow,
+      isSaving,
+      platform: Platform.OS
+    });
   });
 
-  // Hide header
+  // Hide header and setup permissions
   useEffect(() => {
     navigation.setOptions({ headerShown: false });
-    if (Platform.OS !== 'web' && !permission?.granted) {
-      requestPermission();
+    
+    if (Platform.OS !== 'web') {
+      if (!permission) {
+        DebugLogger.log('PERMISSIONS', 'Permission object is null');
+      } else if (!permission.granted) {
+        DebugLogger.log('PERMISSIONS', 'Camera permission not granted, requesting...');
+        requestPermission();
+      } else {
+        DebugLogger.log('PERMISSIONS', 'Camera permission granted');
+        setCameraReady(true);
+      }
+    } else {
+      DebugLogger.log('PERMISSIONS', 'Web platform, skipping camera permissions');
     }
   }, [permission, navigation]);
 
-  // Video ready listener - MINIMAL
+  // Video ready listener
   useEffect(() => {
     const subscription = player.addListener('statusChange', (status) => {
+      DebugLogger.log('VIDEO', 'Status change', status);
+      
       if (status.status === 'readyToPlay' && !videoReady) {
-        console.log("📺 Video ready, duration:", player.duration);
+        DebugLogger.log('VIDEO', 'Video ready', {
+          duration: player.duration,
+          currentTime: player.currentTime
+        });
         setVideoReady(true);
-        logEverything("VIDEO_READY");
       }
     });
 
     return () => subscription?.remove();
-  }, [player, videoReady, logEverything]);
+  }, [player, videoReady]);
 
-  // Countdown logic - ISOLATED
+  // Start countdown when both are ready
   useEffect(() => {
     const isReady = videoReady && cameraReady;
     const shouldStart = isReady && !hasStartedFlow && !isRecording && !isSaving;
 
-    if (shouldStart) {
-      console.log("✅ Starting countdown");
-      setHasStartedFlow(true);
-      setCountdown(2);
-      logEverything("COUNTDOWN_START");
-    }
-  }, [videoReady, cameraReady, hasStartedFlow, isRecording, isSaving, logEverything]);
+    DebugLogger.log('FLOW', 'Flow check', {
+      isReady,
+      shouldStart,
+      videoReady,
+      cameraReady,
+      hasStartedFlow,
+      isRecording,
+      isSaving
+    });
 
-  // Countdown timer - ISOLATED
+    if (shouldStart) {
+      DebugLogger.log('FLOW', 'Starting countdown');
+      setHasStartedFlow(true);
+      setCountdown(3); // Longer countdown for debugging
+    }
+  }, [videoReady, cameraReady, hasStartedFlow, isRecording, isSaving]);
+
+  // Countdown timer
   useEffect(() => {
     if (countdown !== null && countdown > 0) {
-      console.log(`⏱️ Countdown: ${countdown}`);
+      DebugLogger.log('COUNTDOWN', `Countdown: ${countdown}`);
       const timer = setTimeout(() => setCountdown(countdown - 1), 1000);
       return () => clearTimeout(timer);
     } else if (countdown === 0) {
-      console.log("🎬 Countdown finished, starting recording");
+      DebugLogger.log('COUNTDOWN', 'Countdown finished, starting recording');
       setCountdown(null);
-      logEverything("COUNTDOWN_FINISHED");
       startRecording();
     }
-  }, [countdown, logEverything]);
+  }, [countdown]);
 
-  // Start recording - SUPER SIMPLE
-  const startRecording = useCallback(() => {
-    console.log("🎥 START RECORDING CALLED");
-    logEverything("START_RECORDING_BEGIN");
+  // Validate recording file
+  const validateRecordingFile = async (uri: string): Promise<boolean> => {
+    try {
+      DebugLogger.log('VALIDATION', 'Validating recording file', { uri });
+      
+      const fileInfo = await FileSystem.getInfoAsync(uri);
+      DebugLogger.log('VALIDATION', 'File info', fileInfo);
+      
+      if (!fileInfo.exists) {
+        DebugLogger.error('VALIDATION', 'File does not exist');
+        return false;
+      }
+
+      if (fileInfo.size === 0) {
+        DebugLogger.error('VALIDATION', 'File is empty');
+        return false;
+      }
+
+      // Check file extension
+      const extension = uri.split('.').pop()?.toLowerCase() || '';
+      const isVideo = ['mp4', 'mov', 'm4v', 'avi'].includes(extension);
+      const isPhoto = ['jpg', 'jpeg', 'png', 'gif'].includes(extension);
+
+      DebugLogger.log('VALIDATION', 'File type analysis', {
+        extension,
+        isVideo,
+        isPhoto,
+        size: fileInfo.size
+      });
+
+      if (isPhoto) {
+        DebugLogger.error('VALIDATION', '🚨 CRITICAL: Camera recorded a PHOTO instead of VIDEO!');
+        Alert.alert('❌ Recording Issue', 'Camera captured a photo instead of video!');
+        return false;
+      }
+
+      if (!isVideo) {
+        DebugLogger.error('VALIDATION', 'Unknown file type');
+        return false;
+      }
+
+      DebugLogger.log('VALIDATION', '✅ Video file validation passed');
+      return true;
+
+    } catch (error) {
+      DebugLogger.error('VALIDATION', 'File validation error', error);
+      return false;
+    }
+  };
+
+  // Start recording - ENHANCED DEBUG VERSION
+  const startRecording = useCallback(async () => {
+    DebugLogger.log('RECORDING', 'START RECORDING CALLED');
 
     if (isActivelyRecordingRef.current) {
-      console.log("Already recording, abort");
+      DebugLogger.log('RECORDING', 'Already recording, aborting');
       return;
     }
 
-    // Set states
-    isActivelyRecordingRef.current = true;
-    setIsRecording(true);
-    
-    logEverything("START_RECORDING_STATES_SET");
+    try {
+      isActivelyRecordingRef.current = true;
+      setIsRecording(true);
+      recordingStartTimeRef.current = Date.now();
+      
+      DebugLogger.log('RECORDING', 'Recording state set, starting video playback');
+      
+      // Start video playback
+      player.currentTime = 0;
+      player.play();
+      
+      DebugLogger.log('RECORDING', 'Video playback started');
 
-    // Start video
-    player.currentTime = 0;
-    player.play();
-    console.log("▶️ Video started");
+      // Start camera recording based on platform
+      if (Platform.OS === 'web') {
+        DebugLogger.log('RECORDING', 'Web platform - WebCamera should handle recording');
+      } else {
+        DebugLogger.log('RECORDING', 'Mobile platform - starting camera recording');
+        
+        if (!cameraRef.current) {
+          throw new Error('Camera ref is null');
+        }
 
-    // Set stop timeout
-    const duration = player.duration;
-    const timeoutMs = duration > 0 ? Math.ceil(duration * 1000) + 500 : 8000;
-    
-    console.log(`⏰ Setting timeout for ${timeoutMs}ms`);
-    stopTimeoutRef.current = setTimeout(() => {
-      console.log("⏰ TIMEOUT FIRED - calling stopRecording");
-      logEverything("TIMEOUT_FIRED");
-      stopRecording();
-    }, timeoutMs);
+        // Enhanced recording options
+        const recordingOptions: CameraRecordingOptions = {
+          maxDuration: 60, // Longer duration for testing
+        };
 
-    logEverything("START_RECORDING_COMPLETE");
-  }, [player, logEverything]);
+        DebugLogger.log('RECORDING', 'Calling recordAsync with options', recordingOptions);
+        
+        // Start recording
+        const recordingPromise = cameraRef.current.recordAsync(recordingOptions);
+        recordingRef.current = recordingPromise;
+        
+        DebugLogger.log('RECORDING', 'recordAsync called, promise created');
+        
+        // Set up promise handlers for debugging
+        recordingPromise
+          .then((result) => {
+            DebugLogger.log('RECORDING', 'Recording promise resolved', result);
+          })
+          .catch((error) => {
+            DebugLogger.error('RECORDING', 'Recording promise rejected', error);
+          });
+      }
 
-  // Stop recording - BULLETPROOF
-  const stopRecording = useCallback(() => {
-    console.log("🛑 STOP RECORDING CALLED");
-    logEverything("STOP_RECORDING_CALLED");
+      // Set stop timeout
+      const duration = player.duration;
+      const timeoutMs = duration > 0 ? Math.ceil(duration * 1000) + 2000 : 15000; // Extra time for debugging
+      
+      DebugLogger.log('RECORDING', 'Setting stop timeout', {
+        videoDuration: duration,
+        timeoutMs
+      });
+      
+      stopTimeoutRef.current = setTimeout(() => {
+        DebugLogger.log('RECORDING', 'Timeout fired - calling stopRecording');
+        stopRecording();
+      }, timeoutMs);
+
+    } catch (error: any) {
+      DebugLogger.error('RECORDING', 'Failed to start recording', error);
+      isActivelyRecordingRef.current = false;
+      setIsRecording(false);
+      Alert.alert('Recording Error', `Failed to start recording: ${error?.message || 'Unknown error'}`);
+    }
+  }, [player]);
+
+  // Stop recording - ENHANCED DEBUG VERSION
+  const stopRecording = useCallback(async () => {
+    DebugLogger.log('RECORDING', 'STOP RECORDING CALLED');
 
     if (!isActivelyRecordingRef.current) {
-      console.log("🛑 NOT ACTIVELY RECORDING - ABORTING");
-      logEverything("STOP_RECORDING_ABORTED");
+      DebugLogger.log('RECORDING', 'Not actively recording, aborting stop');
       return;
     }
 
-    console.log("🛑 PROCEEDING WITH STOP");
-    isActivelyRecordingRef.current = false;
-    setIsRecording(false);
-    setIsSaving(true);
+    const recordingDuration = recordingStartTimeRef.current ? 
+      Date.now() - recordingStartTimeRef.current : 0;
 
-    // Clear timeout
-    if (stopTimeoutRef.current) {
-      clearTimeout(stopTimeoutRef.current);
-      stopTimeoutRef.current = null;
-    }
+    DebugLogger.log('RECORDING', 'Stopping recording', {
+      recordingDuration: `${recordingDuration}ms`
+    });
 
-    logEverything("STOP_RECORDING_PROCESSING");
+    try {
+      isActivelyRecordingRef.current = false;
+      setIsRecording(false);
+      setIsSaving(true);
 
-    // Simulate processing and save
-    setTimeout(async () => {
-      try {
-        // Check for web blob
-        if (Platform.OS === 'web') {
-          console.log("🌐 Checking for web blob...");
-          let attempts = 0;
-          while (!webRecordingBlobRef.current && attempts < 30) {
-            await new Promise(resolve => setTimeout(resolve, 100));
-            attempts++;
-          }
-          
-          if (webRecordingBlobRef.current) {
-            console.log("✅ Web blob available:", webRecordingBlobRef.current.size);
-            
-            // Save the feeb
-            const permanentUri = await FeebStorage.saveWebVideoBlob(webRecordingBlobRef.current);
-            const newFeeb = FeebStorage.createFeeb(permanentUri, videoUri);
-            await FeebStorage.saveFeeb(newFeeb);
-            
-            Alert.alert("Success!", "Your feeb has been saved!");
-            logEverything("SAVE_SUCCESS");
-          } else {
-            console.log("❌ No web blob available");
-            Alert.alert("Error", "No recording available");
-            logEverything("SAVE_ERROR_NO_BLOB");
-          }
-        }
-      } catch (error) {
-        console.error("❌ Save error:", error);
-        Alert.alert("Error", "Failed to save feeb");
-        logEverything("SAVE_ERROR");
-      } finally {
-        setIsSaving(false);
-        webRecordingBlobRef.current = null;
-        
-        setTimeout(() => {
-          navigation.goBack();
-        }, 1500);
+      // Clear timeout
+      if (stopTimeoutRef.current) {
+        clearTimeout(stopTimeoutRef.current);
+        stopTimeoutRef.current = null;
       }
-    }, 1000);
-  }, [navigation, videoUri, logEverything]);
+
+      // Stop and save recording based on platform
+      if (Platform.OS === 'web') {
+        DebugLogger.log('RECORDING', 'Web platform - handling web recording');
+        
+        let attempts = 0;
+        const maxAttempts = 50;
+        
+        while (!webRecordingBlobRef.current && attempts < maxAttempts) {
+          DebugLogger.log('RECORDING', `Waiting for web blob, attempt ${attempts + 1}/${maxAttempts}`);
+          await new Promise(resolve => setTimeout(resolve, 100));
+          attempts++;
+        }
+        
+        if (webRecordingBlobRef.current) {
+          DebugLogger.log('RECORDING', 'Web blob available', {
+            size: webRecordingBlobRef.current.size,
+            type: webRecordingBlobRef.current.type
+          });
+          await saveWebRecording(webRecordingBlobRef.current);
+        } else {
+          DebugLogger.error('RECORDING', 'No web blob available after waiting');
+          Alert.alert("Error", "No recording available");
+        }
+      } else {
+        DebugLogger.log('RECORDING', 'Mobile platform - stopping camera recording');
+        
+        // Stop the camera recording
+        if (cameraRef.current) {
+          DebugLogger.log('RECORDING', 'Calling stopRecording on camera');
+          cameraRef.current.stopRecording();
+        }
+        
+        // Wait for recording to complete
+        if (recordingRef.current) {
+          DebugLogger.log('RECORDING', 'Waiting for recording promise to resolve');
+          
+          try {
+            const recording = await recordingRef.current;
+            DebugLogger.log('RECORDING', 'Recording promise resolved', {
+              recording,
+              uri: recording?.uri,
+              type: typeof recording
+            });
+            
+            if (recording && recording.uri) {
+              // Validate the recording file
+              const isValid = await validateRecordingFile(recording.uri);
+              
+              if (isValid) {
+                await saveMobileRecording(recording);
+              } else {
+                Alert.alert("Recording Issue", "The recorded file appears to be invalid or is a photo instead of video.");
+              }
+            } else {
+              DebugLogger.error('RECORDING', 'Invalid recording result');
+              Alert.alert("Error", "Recording failed - no video file created");
+            }
+          } catch (recordingError: any) {
+            DebugLogger.error('RECORDING', 'Error waiting for recording', recordingError);
+            Alert.alert("Error", `Recording failed: ${recordingError?.message || 'Unknown error'}`);
+          }
+        } else {
+          DebugLogger.error('RECORDING', 'No recording promise available');
+          Alert.alert("Error", "No recording was started");
+        }
+      }
+
+    } catch (error: any) {
+      DebugLogger.error('RECORDING', 'Error stopping recording', error);
+      Alert.alert('Error', `Failed to save recording: ${error?.message || 'Unknown error'}`);
+    } finally {
+      setIsSaving(false);
+      webRecordingBlobRef.current = null;
+      recordingRef.current = null;
+      recordingStartTimeRef.current = null;
+      
+      setTimeout(() => {
+        navigation.goBack();
+      }, 2000); // Longer delay for debugging
+    }
+  }, [navigation]);
 
   // Manual stop for testing
   const manualStop = useCallback(() => {
-    console.log("🛑 MANUAL STOP PRESSED");
-    logEverything("MANUAL_STOP");
+    DebugLogger.log('RECORDING', 'Manual stop pressed');
     stopRecording();
-  }, [stopRecording, logEverything]);
+  }, [stopRecording]);
 
-  // Camera ready
+  // Camera ready handler
   const handleCameraReady = useCallback(() => {
-    console.log("📹 Camera ready");
+    DebugLogger.log('CAMERA', 'Camera ready callback fired');
     setCameraReady(true);
-    logEverything("CAMERA_READY");
-  }, [logEverything]);
+  }, []);
 
-  // Web recording complete
+  // Web recording complete handler
   const handleWebRecordingComplete = useCallback((videoBlob: Blob) => {
-    console.log("🎬 Web recording completed:", videoBlob.size, "bytes");
+    DebugLogger.log('WEB_RECORDING', 'Web recording completed', {
+      size: videoBlob.size,
+      type: videoBlob.type
+    });
     webRecordingBlobRef.current = videoBlob;
-    logEverything("WEB_RECORDING_COMPLETE");
-  }, [logEverything]);
+  }, []);
+
+  // Save web recording
+  const saveWebRecording = useCallback(async (blob: Blob) => {
+    try {
+      DebugLogger.log('SAVE', 'Saving web recording', {
+        size: blob.size,
+        type: blob.type
+      });
+      
+      const permanentUri = await FeebStorage.saveWebVideoBlob(blob);
+      const newFeeb = FeebStorage.createFeeb(permanentUri, videoUri);
+      await FeebStorage.saveFeeb(newFeeb);
+      
+      DebugLogger.log('SAVE', 'Web recording saved successfully', { permanentUri });
+      Alert.alert("Success!", "Your reaction has been saved!");
+      
+    } catch (error: any) {
+      DebugLogger.error('SAVE', 'Error saving web recording', error);
+      throw error;
+    }
+  }, [videoUri]);
+
+  // Save mobile recording
+  const saveMobileRecording = useCallback(async (recording: any) => {
+    try {
+      DebugLogger.log('SAVE', 'Saving mobile recording', {
+        uri: recording.uri,
+        recording
+      });
+      
+      const permanentUri = await FeebStorage.saveVideoToPermanentLocation(recording.uri);
+      const newFeeb = FeebStorage.createFeeb(permanentUri, videoUri);
+      await FeebStorage.saveFeeb(newFeeb);
+      
+      DebugLogger.log('SAVE', 'Mobile recording saved successfully', { permanentUri });
+      Alert.alert("Success!", "Your reaction has been saved!");
+      
+    } catch (error: any) {
+      DebugLogger.error('SAVE', 'Error saving mobile recording', error);
+      throw error;
+    }
+  }, [videoUri]);
 
   // Permission check
   if (Platform.OS !== 'web' && !permission?.granted) {
@@ -252,6 +460,16 @@ export default function RecordReactionScreen() {
 
   return (
     <View style={styles.container}>
+      {/* Debug Info Overlay */}
+      <View style={styles.debugInfo}>
+        <Text style={styles.debugText}>
+          Platform: {Platform.OS} | Video: {videoReady ? '✅' : '❌'} | Camera: {cameraReady ? '✅' : '❌'}
+        </Text>
+        <Text style={styles.debugText}>
+          Recording: {isRecording ? '🔴' : '⚫'} | Saving: {isSaving ? '💾' : '⚫'}
+        </Text>
+      </View>
+
       {/* Back button */}
       <TouchableOpacity
         style={styles.backButton}
@@ -299,6 +517,7 @@ export default function RecordReactionScreen() {
             style={StyleSheet.absoluteFillObject}
             facing="front"
             mode="video"
+            videoQuality="720p"
             onCameraReady={handleCameraReady}
           />
         )}
@@ -326,8 +545,6 @@ export default function RecordReactionScreen() {
           <Text style={styles.loadingText}>Saving your feeb...</Text>
         </View>
       )}
-
-
     </View>
   );
 }
@@ -336,6 +553,22 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#000" },
   half: { flex: 1, overflow: "hidden", backgroundColor: "#000" },
   video: { flex: 1, width: screenWidth, backgroundColor: "#000" },
+
+  debugInfo: {
+    position: "absolute",
+    top: 100,
+    left: 10,
+    right: 10,
+    backgroundColor: "rgba(0, 0, 0, 0.8)",
+    padding: 8,
+    borderRadius: 4,
+    zIndex: 1001,
+  },
+  debugText: {
+    color: "#00FF00",
+    fontSize: 10,
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+  },
 
   backButton: { position: "absolute", top: 50, left: 20, zIndex: 1000 },
   backButtonCircle: {
@@ -379,8 +612,6 @@ const styles = StyleSheet.create({
   },
   loadingText: { color: "#fff", marginTop: 16, fontSize: 16 },
   countdownText: { fontSize: 120, color: "#fff", fontWeight: "bold", textAlign: "center" },
-
-
 
   permissionContainer: {
     flex: 1,
