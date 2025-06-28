@@ -1,3 +1,4 @@
+// components/WebCamera.tsx
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { View, StyleSheet, Platform, Text } from 'react-native';
 
@@ -65,7 +66,7 @@ export default function WebCamera({ isRecording, onCameraReady, onRecordingCompl
 
   const checkCameraAvailability = async () => {
     try {
-      console.log('🔍 Checking camera availability...');
+      console.log('🔍 Checking camera and microphone availability...');
       
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         throw new Error('Media devices API not supported in this browser');
@@ -73,17 +74,22 @@ export default function WebCamera({ isRecording, onCameraReady, onRecordingCompl
 
       const devices = await navigator.mediaDevices.enumerateDevices();
       const videoDevices = devices.filter(device => device.kind === 'videoinput');
+      const audioDevices = devices.filter(device => device.kind === 'audioinput');
       
-      console.log('📱 Available video devices:', videoDevices.length);
-      setDebugInfo(`Found ${videoDevices.length} camera(s)`);
+      console.log('📱 Available devices:', { video: videoDevices.length, audio: audioDevices.length });
+      setDebugInfo(`Found ${videoDevices.length} camera(s) and ${audioDevices.length} microphone(s)`);
 
       if (videoDevices.length === 0) {
         throw new Error('No camera devices found on this device');
       }
 
-      return videoDevices;
+      if (audioDevices.length === 0) {
+        console.warn('⚠️ No microphone found - recording will be video only');
+      }
+
+      return { videoDevices, audioDevices };
     } catch (error) {
-      console.error('❌ Camera availability check failed:', error);
+      console.error('❌ Device availability check failed:', error);
       throw error;
     }
   };
@@ -97,10 +103,11 @@ export default function WebCamera({ isRecording, onCameraReady, onRecordingCompl
     try {
       setIsInitializing(true);
       setError(null);
-      console.log('🌐 Initializing web camera...');
+      console.log('🌐 Initializing web camera with audio...');
       
-      await checkCameraAvailability();
+      const { audioDevices } = await checkCameraAvailability();
 
+      // Try different constraint configurations, prioritizing audio + video
       const constraintOptions = [
         {
           video: { 
@@ -108,7 +115,11 @@ export default function WebCamera({ isRecording, onCameraReady, onRecordingCompl
             width: { ideal: 1280 },
             height: { ideal: 720 }
           }, 
-          audio: true 
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            sampleRate: 44100
+          }
         },
         {
           video: { 
@@ -116,12 +127,20 @@ export default function WebCamera({ isRecording, onCameraReady, onRecordingCompl
             width: { ideal: 640 },
             height: { ideal: 480 }
           }, 
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true
+          }
+        },
+        {
+          video: { facingMode: 'user' }, 
           audio: true 
         },
         {
           video: true, 
           audio: true 
         },
+        // Fallback to video only if audio fails
         {
           video: true, 
           audio: false 
@@ -130,14 +149,22 @@ export default function WebCamera({ isRecording, onCameraReady, onRecordingCompl
 
       let stream: MediaStream | null = null;
       let lastError: Error | null = null;
+      let usedAudio = false;
 
       for (let i = 0; i < constraintOptions.length; i++) {
         try {
           console.log(`🎥 Attempting camera access with configuration ${i + 1}...`);
           setDebugInfo(`Trying camera config ${i + 1}/${constraintOptions.length}`);
           stream = await navigator.mediaDevices.getUserMedia(constraintOptions[i]);
+          
+          // Check if we got audio track
+          const audioTracks = stream.getAudioTracks();
+          const videoTracks = stream.getVideoTracks();
+          usedAudio = audioTracks.length > 0;
+          
           console.log(`✅ Camera access successful with configuration ${i + 1}`);
-          setDebugInfo(`Camera access successful!`);
+          console.log(`📊 Stream tracks: ${videoTracks.length} video, ${audioTracks.length} audio`);
+          setDebugInfo(`Camera ready! Video: ${videoTracks.length}, Audio: ${audioTracks.length}`);
           break;
         } catch (err) {
           lastError = err as Error;
@@ -151,6 +178,11 @@ export default function WebCamera({ isRecording, onCameraReady, onRecordingCompl
         throw lastError || new Error('Failed to access camera with all configurations');
       }
 
+      // Log stream details
+      stream.getTracks().forEach(track => {
+        console.log(`🎵 Track: ${track.kind} - ${track.label} - enabled: ${track.enabled}`);
+      });
+
       streamRef.current = stream;
 
       if (videoRef.current) {
@@ -161,24 +193,22 @@ export default function WebCamera({ isRecording, onCameraReady, onRecordingCompl
 
       console.log('🚀 Stream ready, triggering callback');
       setHasPermission(true);
-      setDebugInfo('Camera ready!');
+      setDebugInfo(`Camera ready! ${usedAudio ? 'With audio' : 'Video only'}`);
       onCameraReady();
     } catch (error) {
       console.error('❌ Failed to initialize camera:', error);
       setHasPermission(false);
       
-      let errorMessage = 'Failed to access camera';
+      let errorMessage = 'Failed to access camera and microphone';
       if (error instanceof Error) {
         if (error.name === 'NotFoundError') {
-          errorMessage = 'No camera found. Please connect a camera and try again.';
+          errorMessage = 'Camera or microphone not found. Please check your devices.';
         } else if (error.name === 'NotAllowedError') {
-          errorMessage = 'Camera permission denied. Please allow camera access and refresh the page.';
+          errorMessage = 'Camera and microphone access denied. Please allow access and refresh.';
         } else if (error.name === 'NotReadableError') {
-          errorMessage = 'Camera is busy or unavailable. Please close other applications using the camera.';
+          errorMessage = 'Camera or microphone is busy. Close other applications and try again.';
         } else if (error.message.includes('Media devices API not supported')) {
-          errorMessage = 'Camera not supported in this browser. Please use Chrome, Firefox, or Safari.';
-        } else if (error.message.includes('No camera devices found')) {
-          errorMessage = 'No camera detected. Please connect a camera or check your device settings.';
+          errorMessage = 'Media recording not supported. Please use Chrome, Firefox, or Safari.';
         }
       }
       
@@ -201,9 +231,15 @@ export default function WebCamera({ isRecording, onCameraReady, onRecordingCompl
 
     try {
       recordingStateRef.current = 'starting';
-      console.log('🎥 Starting web recording...');
+      console.log('🎥 Starting web recording with audio...');
       logState('START_RECORDING');
       
+      // Check available tracks
+      const audioTracks = streamRef.current.getAudioTracks();
+      const videoTracks = streamRef.current.getVideoTracks();
+      console.log(`📊 Starting recording with ${videoTracks.length} video tracks and ${audioTracks.length} audio tracks`);
+
+      // Preferred MIME types that support audio
       const mimeTypes = [
         'video/webm;codecs=vp9,opus',
         'video/webm;codecs=vp8,opus', 
@@ -213,17 +249,25 @@ export default function WebCamera({ isRecording, onCameraReady, onRecordingCompl
       ];
 
       let mediaRecorder: MediaRecorder | null = null;
+      let selectedMimeType = '';
+
       for (const mimeType of mimeTypes) {
         if (MediaRecorder.isTypeSupported(mimeType)) {
           console.log(`📼 Using MIME type: ${mimeType}`);
-          mediaRecorder = new MediaRecorder(streamRef.current, { mimeType });
+          selectedMimeType = mimeType;
+          mediaRecorder = new MediaRecorder(streamRef.current, { 
+            mimeType,
+            audioBitsPerSecond: 128000,
+            videoBitsPerSecond: 2500000
+          });
           break;
         }
       }
 
       if (!mediaRecorder) {
-        mediaRecorder = new MediaRecorder(streamRef.current);
         console.log('📼 Using default MediaRecorder settings');
+        mediaRecorder = new MediaRecorder(streamRef.current);
+        selectedMimeType = 'default';
       }
 
       const chunks: BlobPart[] = [];
@@ -239,8 +283,8 @@ export default function WebCamera({ isRecording, onCameraReady, onRecordingCompl
         console.log('🛑 Web recording stopped');
         logState('RECORDING_STOPPED', { chunksCount: chunks.length });
         
-        const videoBlob = new Blob(chunks, { type: mediaRecorder?.mimeType || 'video/webm' });
-        console.log(`📁 Created video blob: ${videoBlob.size} bytes`);
+        const videoBlob = new Blob(chunks, { type: selectedMimeType || 'video/webm' });
+        console.log(`📁 Created video blob: ${videoBlob.size} bytes, type: ${videoBlob.type}`);
         
         recordingStateRef.current = 'idle';
         onRecordingComplete(videoBlob);
@@ -255,7 +299,7 @@ export default function WebCamera({ isRecording, onCameraReady, onRecordingCompl
       mediaRecorder.onstart = () => {
         console.log('✅ MediaRecorder started');
         recordingStateRef.current = 'recording';
-        logState('RECORDING_STARTED');
+        logState('RECORDING_STARTED', { mimeType: selectedMimeType });
       };
 
       mediaRecorder.start(1000); // Collect data every second
@@ -337,12 +381,12 @@ export default function WebCamera({ isRecording, onCameraReady, onRecordingCompl
   if (error) {
     return (
       <View style={styles.errorContainer}>
-        <Text style={styles.errorTitle}>Camera Error</Text>
+        <Text style={styles.errorTitle}>Camera/Microphone Error</Text>
         <Text style={styles.errorMessage}>{error}</Text>
         <Text style={styles.errorHint}>
           Troubleshooting tips:{'\n'}
-          • Check camera permissions in browser settings{'\n'}
-          • Ensure no other apps are using the camera{'\n'}
+          • Allow camera AND microphone permissions{'\n'}
+          • Close other apps using camera/microphone{'\n'}
           • Try refreshing the page{'\n'}
           • Use Chrome, Firefox, or Safari for best results
         </Text>
@@ -354,7 +398,7 @@ export default function WebCamera({ isRecording, onCameraReady, onRecordingCompl
     return (
       <View style={styles.loadingContainer}>
         <Text style={styles.loadingText}>
-          {isInitializing ? 'Initializing camera...' : 'Waiting for camera...'}
+          {isInitializing ? 'Initializing camera and microphone...' : 'Waiting for camera...'}
         </Text>
         {debugInfo ? (
           <Text style={styles.debugText}>{debugInfo}</Text>
@@ -384,6 +428,12 @@ export default function WebCamera({ isRecording, onCameraReady, onRecordingCompl
         muted
         playsInline
       />
+      {/* Audio indicator */}
+      {streamRef.current && streamRef.current?.getAudioTracks().length > 0 && (
+        <View style={styles.audioIndicator}>
+          <Text style={styles.audioText}>🎤</Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -398,6 +448,18 @@ const styles = StyleSheet.create({
     height: '100%',
     objectFit: 'cover',
   } as any,
+
+  audioIndicator: {
+    position: 'absolute',
+    top: 10,
+    left: 10,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    borderRadius: 12,
+    padding: 4,
+  },
+  audioText: {
+    fontSize: 16,
+  },
 
   errorContainer: {
     flex: 1,

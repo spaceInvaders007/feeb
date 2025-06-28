@@ -12,7 +12,7 @@ export function activate(context: vscode.ExtensionContext) {
     const root = folders[0].uri.fsPath;
 
     // Ask for max chunk size
-    const defaultMax = '30000';
+    const defaultMax = '80000';
     const input = await vscode.window.showInputBox({
       prompt: 'Max characters per chunk (e.g. 30000)',
       value: defaultMax
