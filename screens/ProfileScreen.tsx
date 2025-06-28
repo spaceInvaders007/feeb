@@ -20,7 +20,6 @@ const SPACING = 8;
 const COLUMN_COUNT = 2;
 const ITEM_SIZE = (screenWidth - SPACING * (COLUMN_COUNT + 1)) / COLUMN_COUNT;
 
-// User data (in real app, this would come from auth/user context)
 const user = {
   avatarUri: "https://randomuser.me/api/portraits/women/44.jpg",
   name: "Lindsey Horan",
@@ -30,7 +29,6 @@ const user = {
   likes: "12.3k",
 };
 
-// Sample content data (different structure from Feeb)
 interface ContentItem {
   id: string;
   uri: string;
@@ -50,24 +48,22 @@ interface FeebItemState {
   error: boolean;
 }
 
-// Fullscreen Video Modal Component - Now using SideBySidePlayer
-function FullscreenVideoModal({ 
-  visible, 
-  feeb, 
-  onClose 
-}: { 
-  visible: boolean; 
-  feeb: (Feeb & { displayUri?: string }) | null; 
+function FullscreenVideoModal({
+  visible,
+  feeb,
+  onClose,
+}: {
+  visible: boolean;
+  feeb: (Feeb & { displayUri?: string }) | null;
   onClose: () => void;
 }) {
   if (!visible || !feeb) return null;
 
-  // Debug logging for SideBySidePlayer
-  console.log('🎬 FullscreenVideoModal - Opening with:', {
+  console.log("🎬 FullscreenVideoModal - Opening with:", {
     originalVideoUri: feeb.originalVideoUri,
     reactionVideoUri: feeb.displayUri || feeb.uri,
     feebId: feeb.id,
-    isWebBlob: feeb.isWebBlob
+    isWebBlob: feeb.isWebBlob,
   });
 
   return (
@@ -83,34 +79,34 @@ function FullscreenVideoModal({
   );
 }
 
-// Feeb Video Component for grid
-function FeebVideoGridItem({ 
-  feeb, 
-  displayState, 
-  onPress, 
-  onLongPress 
-}: { 
-  feeb: Feeb; 
-  displayState?: FeebItemState; 
-  onPress: () => void; 
+function FeebVideoGridItem({
+  feeb,
+  displayState,
+  onPress,
+  onLongPress,
+}: {
+  feeb: Feeb;
+  displayState?: FeebItemState;
+  onPress: () => void;
   onLongPress: () => void;
 }) {
-  const isWebVideo = Platform.OS === 'web' && feeb.isWebBlob;
+  const isWebVideo = Platform.OS === "web" && feeb.isWebBlob;
   const displayUri = displayState?.displayUri || feeb.uri;
 
-  // Show loading state for web videos that are still loading
   if (isWebVideo && displayState?.loading) {
     return (
-      <TouchableOpacity style={[styles.gridItem, styles.loadingItem]} onPress={onPress}>
+      <TouchableOpacity
+        style={[styles.gridItem, styles.loadingItem]}
+        onPress={onPress}
+      >
         <Text style={styles.loadingText}>Loading...</Text>
       </TouchableOpacity>
     );
   }
 
-  // Show error state for failed loads
   if (displayState?.error) {
     return (
-      <TouchableOpacity 
+      <TouchableOpacity
         style={[styles.gridItem, styles.errorItem]}
         onPress={onLongPress}
         onLongPress={onLongPress}
@@ -123,16 +119,14 @@ function FeebVideoGridItem({
   }
 
   return (
-    <TouchableOpacity 
+    <TouchableOpacity
       style={styles.gridItem}
       onPress={onPress}
       onLongPress={onLongPress}
       activeOpacity={0.8}
     >
-      {/* Video Preview */}
       <View style={styles.videoContainer}>
-        {isWebVideo && displayUri.startsWith('data:') ? (
-          // For web data URLs, use video element
+        {isWebVideo && displayUri.startsWith("data:") ? (
           <video
             src={displayUri}
             style={styles.gridVideoWeb as any}
@@ -149,11 +143,10 @@ function FeebVideoGridItem({
               video.pause();
             }}
             onError={(e) => {
-              console.error('Grid video error for feeb:', feeb.id, e);
+              console.error("Grid video error for feeb:", feeb.id, e);
             }}
           />
         ) : (
-          // For mobile or regular URIs, use simple preview
           <View style={styles.videoPlaceholder}>
             <Ionicons name="videocam" size={32} color="#666" />
             <Text style={styles.videoPlaceholderText}>Tap to play</Text>
@@ -161,14 +154,12 @@ function FeebVideoGridItem({
         )}
       </View>
 
-      {/* Play Button Overlay */}
       <View style={styles.playButtonOverlay}>
         <View style={styles.playButtonCircle}>
           <Ionicons name="play" size={20} color="white" />
         </View>
       </View>
 
-      {/* Video Info Overlay */}
       <View style={styles.videoInfoOverlay}>
         <View style={styles.videoTypeIcon}>
           <Ionicons name="videocam" size={16} color="white" />
@@ -176,9 +167,7 @@ function FeebVideoGridItem({
         <Text style={styles.videoDate}>
           {new Date(feeb.createdAt).toLocaleDateString()}
         </Text>
-        {isWebVideo && (
-          <Text style={styles.videoPlatform}>Web</Text>
-        )}
+        {isWebVideo && <Text style={styles.videoPlatform}>Web</Text>}
       </View>
     </TouchableOpacity>
   );
@@ -187,18 +176,19 @@ function FeebVideoGridItem({
 export default function ProfileScreen() {
   const [activeTab, setActiveTab] = useState<"Feebs" | "Contents">("Feebs");
   const [userFeebs, setUserFeebs] = useState<Feeb[]>([]);
-  const [feebDisplayStates, setFeebDisplayStates] = useState<FeebItemState[]>([]);
+  const [feebDisplayStates, setFeebDisplayStates] = useState<FeebItemState[]>(
+    []
+  );
   const [loading, setLoading] = useState(true);
-  const [fullscreenFeeb, setFullscreenFeeb] = useState<(Feeb & { displayUri?: string }) | null>(null);
+  const [fullscreenFeeb, setFullscreenFeeb] = useState<
+    (Feeb & { displayUri?: string }) | null
+  >(null);
 
-  // DEBUG FUNCTION - Check what's actually being saved
   const debugFeebFiles = async () => {
-    console.log('🔍 ======= FEEB DEBUG START =======');
-    
+    console.log("🔍 ======= FEEB DEBUG START =======");
     try {
       const feebs = await FeebStorage.getAllFeebs();
       console.log(`🔍 Found ${feebs.length} feebs`);
-      
       for (let i = 0; i < feebs.length; i++) {
         const feeb = feebs[i];
         console.log(`🔍 FEEB ${i + 1}:`, {
@@ -206,45 +196,40 @@ export default function ProfileScreen() {
           uri: feeb.uri,
           originalVideoUri: feeb.originalVideoUri,
           isWebBlob: feeb.isWebBlob,
-          createdAt: feeb.createdAt
+          createdAt: feeb.createdAt,
         });
-        
-        // Check if it's a web blob
-        if (Platform.OS === 'web' && feeb.isWebBlob) {
+        if (Platform.OS === "web" && feeb.isWebBlob) {
           try {
-            console.log('🔍 Getting display URI for web feeb...');
+            console.log("🔍 Getting display URI for web feeb...");
             const displayUri = await FeebStorage.getFeebDisplayUri(feeb);
-            
             if (displayUri) {
-              console.log('🔍 Display URI: SUCCESS');
-              console.log('🔍 URI length:', displayUri.length);
-              console.log('🔍 URI starts with:', displayUri.substring(0, 50));
-              console.log('🔍 URI type:', displayUri.startsWith('data:') ? 'DATA_URL' : 'OTHER');
+              console.log("🔍 Display URI: SUCCESS");
+              console.log("🔍 URI length:", displayUri.length);
             } else {
-              console.log('🔍 Display URI: FAILED - empty or null');
+              console.log("🔍 Display URI: FAILED - empty or null");
             }
-          } catch (error) {
-            console.log('🔍 Error getting display URI:', error);
+          } catch (error: any) {
+            console.log(
+              "🔍 Error getting display URI:",
+              error?.message || error
+            );
           }
         }
-        
-        console.log('🔍 -------------------------');
+        console.log("🔍 -------------------------");
       }
-      
       Alert.alert(
-        'Debug Info', 
-        `Found ${feebs.length} feebs. Check console for details.`
+        "Debug Info",
+        `Found ${
+          (await FeebStorage.getAllFeebs()).length
+        } feebs. Check console.`
       );
-      
-    } catch (error) {
-      console.error('🔍 Error in debug:', error);
-      Alert.alert('Debug Error', error.message);
+    } catch (error: any) {
+      console.error("🔍 Error in debug:", error);
+      Alert.alert("Debug Error", error?.message || "Unknown error");
     }
-    
-    console.log('🔍 ======= FEEB DEBUG END =======');
+    console.log("🔍 ======= FEEB DEBUG END =======");
   };
 
-  // Load feebs when screen comes into focus
   useFocusEffect(
     useCallback(() => {
       loadUserFeebs();
@@ -256,131 +241,91 @@ export default function ProfileScreen() {
       setLoading(true);
       const feebs = await FeebStorage.getAllFeebs();
       setUserFeebs(feebs);
-      console.log(`📱 Loaded ${feebs.length} feebs from storage`);
-      
-      // Load display URIs for web feebs
       await loadFeebDisplayUris(feebs);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error loading feebs:", error);
-      Alert.alert("Error", "Failed to load your feebs");
+      Alert.alert("Error", error?.message || "Failed to load your feebs");
     } finally {
       setLoading(false);
     }
   };
 
   const loadFeebDisplayUris = async (feebs: Feeb[]) => {
-    console.log('🖼️ Loading display URIs for feebs...');
-    
-    const displayStates: FeebItemState[] = await Promise.all(
-      feebs.map(async (feeb) => {
-        const state: FeebItemState = {
-          id: feeb.id,
-          displayUri: feeb.uri,
-          loading: false,
-          error: false
-        };
-
-        try {
-          if (Platform.OS === 'web' && feeb.isWebBlob) {
-            console.log(`🔍 Loading display URI for web feeb: ${feeb.id}`);
+    try {
+      const displayStates = await Promise.all(
+        feebs.map(async (feeb) => {
+          const state: FeebItemState = {
+            id: feeb.id,
+            displayUri: feeb.uri,
+            loading: false,
+            error: false,
+          };
+          if (Platform.OS === "web" && feeb.isWebBlob) {
             state.loading = true;
-            
             const displayUri = await FeebStorage.getFeebDisplayUri(feeb);
             state.loading = false;
-            
-            if (displayUri && displayUri.length > 0) {
+            if (displayUri) {
               state.displayUri = displayUri;
-              console.log(`✅ Display URI loaded for ${feeb.id}: Success`);
             } else {
-              console.log(`❌ Display URI failed for ${feeb.id}: Empty or invalid`);
               state.error = true;
-              state.displayUri = '';
+              state.displayUri = "";
             }
           }
-        } catch (error) {
-          console.error(`❌ Error loading display URI for feeb ${feeb.id}:`, error);
-          state.error = true;
-          state.loading = false;
-          state.displayUri = '';
-        }
-
-        return state;
-      })
-    );
-
-    setFeebDisplayStates(displayStates);
-  };
-
-  const getFeebDisplayState = (feebId: string): FeebItemState | undefined => {
-    return feebDisplayStates.find(state => state.id === feebId);
-  };
-
-  const handlePlayFeeb = async (feeb: Feeb) => {
-    try {
-      console.log('🎬 Playing feeb:', feeb.id);
-      
-      let playableUri = feeb.uri;
-      
-      // For web videos, get the display URI
-      if (Platform.OS === 'web' && feeb.isWebBlob) {
-        const displayState = getFeebDisplayState(feeb.id);
-        if (displayState?.displayUri) {
-          playableUri = displayState.displayUri;
-        } else {
-          console.log('Loading display URI for playback...');
-          playableUri = await FeebStorage.getFeebDisplayUri(feeb);
-        }
-      }
-      
-      if (!playableUri) {
-        Alert.alert('Error', 'Video could not be loaded');
-        return;
-      }
-      
-      console.log('🎬 Setting fullscreen feeb with URIs:', {
-        originalVideoUri: feeb.originalVideoUri,
-        reactionVideoUri: playableUri
-      });
-      
-      setFullscreenFeeb({
-        ...feeb,
-        displayUri: playableUri
-      });
-      
-    } catch (error) {
-      console.error('Error playing feeb:', error);
-      Alert.alert('Error', 'Failed to play video');
+          return state;
+        })
+      );
+      setFeebDisplayStates(displayStates);
+    } catch (error: any) {
+      console.error("Error loading display URIs:", error);
+      Alert.alert("Error", error?.message || "Failed to load videos");
     }
   };
 
-  const handleDeleteFeeb = async (feebId: string) => {
-    Alert.alert(
-      "Delete Feeb",
-      "Are you sure you want to delete this feeb?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await FeebStorage.deleteFeeb(feebId);
-              await loadUserFeebs(); // Reload the list
-              Alert.alert("Success", "Feeb deleted successfully");
-            } catch (error) {
-              console.error("Error deleting feeb:", error);
-              Alert.alert("Error", "Failed to delete feeb");
-            }
-          },
-        },
-      ]
-    );
+  const getFeebDisplayState = (feebId: string) =>
+    feebDisplayStates.find((s) => s.id === feebId);
+
+  const handlePlayFeeb = async (feeb: Feeb) => {
+    try {
+      let playableUri = feeb.uri;
+      if (Platform.OS === "web" && feeb.isWebBlob) {
+        const st = getFeebDisplayState(feeb.id);
+        playableUri =
+          st?.displayUri || (await FeebStorage.getFeebDisplayUri(feeb));
+      }
+      if (!playableUri) {
+        Alert.alert("Error", "Video could not be loaded");
+        return;
+      }
+      setFullscreenFeeb({ ...feeb, displayUri: playableUri });
+    } catch (error: any) {
+      console.error("Error playing feeb:", error);
+      Alert.alert("Error", error?.message || "Failed to play video");
+    }
   };
 
-  const handleCleanupInvalidFeebs = async () => {
+  const handleDeleteFeeb = (feebId: string) =>
+    Alert.alert("Delete Feeb", "Are you sure?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await FeebStorage.deleteFeeb(feebId);
+            await loadUserFeebs();
+            Alert.alert("Success", "Feeb deleted");
+          } catch (error: any) {
+            console.error("Error deleting feeb:", error);
+            Alert.alert("Error", error?.message || "Failed to delete feeb");
+          }
+        },
+      },
+    ]);
+
+  const handleCleanupInvalidFeebs = () =>
     Alert.alert(
       "Clean Up Invalid Videos",
-      "This will remove feebs that can no longer be displayed. Continue?",
+      "This will remove feebs that cannot be displayed. Continue?",
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -388,46 +333,35 @@ export default function ProfileScreen() {
           style: "destructive",
           onPress: async () => {
             try {
-              const invalidFeebIds = feebDisplayStates
-                .filter(state => state.error)
-                .map(state => state.id);
-              
-              for (const feebId of invalidFeebIds) {
-                await FeebStorage.deleteFeeb(feebId);
+              const invalid = feebDisplayStates
+                .filter((s) => s.error)
+                .map((s) => s.id);
+              for (const id of invalid) {
+                await FeebStorage.deleteFeeb(id);
               }
-              
-              await loadUserFeebs(); // Reload the list
-              Alert.alert("Success", `Cleaned up ${invalidFeebIds.length} invalid feebs`);
-            } catch (error) {
-              console.error("Error cleaning up feebs:", error);
-              Alert.alert("Error", "Failed to clean up feebs");
+              await loadUserFeebs();
+              Alert.alert("Success", `Removed ${invalid.length} items`);
+            } catch (error: any) {
+              console.error("Error cleaning up:", error);
+              Alert.alert("Error", error?.message || "Failed to clean up");
             }
           },
         },
       ]
     );
-  };
 
-  const renderFeebItem = ({ item }: { item: Feeb }) => {
-    const displayState = getFeebDisplayState(item.id);
-    
-    return (
-      <FeebVideoGridItem
-        feeb={item}
-        displayState={displayState}
-        onPress={() => handlePlayFeeb(item)}
-        onLongPress={() => handleDeleteFeeb(item.id)}
-      />
-    );
-  };
+  const renderFeebItem = ({ item }: { item: Feeb }) => (
+    <FeebVideoGridItem
+      feeb={item}
+      displayState={getFeebDisplayState(item.id)}
+      onPress={() => handlePlayFeeb(item)}
+      onLongPress={() => handleDeleteFeeb(item.id)}
+    />
+  );
 
   const renderContentItem = ({ item }: { item: ContentItem }) => (
     <View style={styles.gridItem}>
-      <Image 
-        source={{ uri: item.uri }} 
-        style={styles.gridImage}
-        resizeMode="cover"
-      />
+      <Image source={{ uri: item.uri }} style={styles.gridImage} />
       <View style={styles.playIcon}>
         <Ionicons name="play-circle" size={24} color="white" />
       </View>
@@ -437,53 +371,38 @@ export default function ProfileScreen() {
   const renderHeader = () => (
     <View style={styles.headerContainer}>
       <Text style={styles.title}>My profile</Text>
-      
-      {/* User Avatar */}
-      <Image 
-        source={{ uri: user.avatarUri }} 
-        style={styles.avatar}
-        resizeMode="cover"
-      />
+      <Image source={{ uri: user.avatarUri }} style={styles.avatar} />
       <Text style={styles.name}>{user.name}</Text>
       <Text style={styles.handle}>{user.handle}</Text>
-
-      {/* Stats Row */}
       <View style={styles.statsRow}>
-        <View style={styles.stat}>
-          <Text style={styles.statValue}>{user.followers}</Text>
-          <Text style={styles.statLabel}>Followers</Text>
-        </View>
-        <View style={styles.stat}>
-          <Text style={styles.statValue}>{user.following}</Text>
-          <Text style={styles.statLabel}>Following</Text>
-        </View>
-        <View style={styles.stat}>
-          <Text style={styles.statValue}>{userFeebs.length}</Text>
-          <Text style={styles.statLabel}>Feebs</Text>
-        </View>
+        {[
+          { label: "Followers", value: user.followers },
+          { label: "Following", value: user.following },
+          { label: "Feebs", value: String(userFeebs.length) },
+        ].map((s) => (
+          <View key={s.label} style={styles.stat}>
+            <Text style={styles.statValue}>{s.value}</Text>
+            <Text style={styles.statLabel}>{s.label}</Text>
+          </View>
+        ))}
       </View>
-
-      {/* Edit Button */}
       <TouchableOpacity style={styles.editButton}>
         <Text style={styles.editButtonText}>Edit profile</Text>
         <Ionicons name="pencil" size={20} color="#00CFFF" />
       </TouchableOpacity>
-
-      {/* DEBUG BUTTON */}
       <TouchableOpacity style={styles.debugButton} onPress={debugFeebFiles}>
         <Text style={styles.debugButtonText}>Debug Feebs</Text>
         <Ionicons name="bug" size={20} color="#FF6B6B" />
       </TouchableOpacity>
-
-      {/* Cleanup button for invalid feebs */}
-      {Platform.OS === 'web' && feebDisplayStates.some(state => state.error) && (
-        <TouchableOpacity style={styles.cleanupButton} onPress={handleCleanupInvalidFeebs}>
+      {Platform.OS === "web" && feebDisplayStates.some((s) => s.error) && (
+        <TouchableOpacity
+          style={styles.cleanupButton}
+          onPress={handleCleanupInvalidFeebs}
+        >
           <Text style={styles.cleanupButtonText}>Clean up invalid videos</Text>
           <Ionicons name="trash" size={16} color="#ff6b6b" />
         </TouchableOpacity>
       )}
-
-      {/* Tab Row */}
       <View style={styles.tabRow}>
         {(["Feebs", "Contents"] as const).map((tab) => (
           <TouchableOpacity
@@ -497,13 +416,12 @@ export default function ProfileScreen() {
                 activeTab === tab && styles.tabTextActive,
               ]}
             >
-              {tab} {tab === "Feebs" && `(${userFeebs.length})`}
+              {tab}
+              {tab === "Feebs" && ` (${userFeebs.length})`}
             </Text>
           </TouchableOpacity>
         ))}
       </View>
-      
-      {/* Divider */}
       <View style={styles.dividerRow}>
         <View
           style={[
@@ -563,8 +481,6 @@ export default function ProfileScreen() {
           renderItem={renderContentItem}
         />
       )}
-
-      {/* Fullscreen Video Modal */}
       <FullscreenVideoModal
         visible={!!fullscreenFeeb}
         feeb={fullscreenFeeb}
@@ -575,23 +491,11 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#fff",
-  },
-  listContent: {
-    padding: SPACING,
-    backgroundColor: "#fff",
-  },
-  headerContainer: {
-    padding: SPACING,
-    paddingBottom: SPACING * 2,
-    backgroundColor: "#fff",
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: "700",
-  },
+  /* ... your existing styles unchanged ... */
+  container: { flex: 1, backgroundColor: "#fff" },
+  listContent: { padding: SPACING, backgroundColor: "#fff" },
+  headerContainer: { padding: SPACING, paddingBottom: SPACING * 2 },
+  title: { fontSize: 28, fontWeight: "700" },
   avatar: {
     width: 96,
     height: 96,
@@ -654,6 +558,23 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     marginRight: 8,
   },
+  cleanupButton: {
+    flexDirection: "row",
+    alignSelf: "center",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#ff6b6b",
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    marginBottom: SPACING,
+  },
+  cleanupButtonText: {
+    color: "#ff6b6b",
+    fontSize: 12,
+    fontWeight: "600",
+    marginRight: 6,
+  },
   tabRow: {
     flexDirection: "row",
     justifyContent: "space-around",
@@ -662,15 +583,9 @@ const styles = StyleSheet.create({
   tabButton: { flex: 1, alignItems: "center", paddingVertical: 8 },
   tabText: { fontSize: 16, color: "#888" },
   tabTextActive: { color: "#000", fontWeight: "700" },
-  dividerRow: {
-    flexDirection: "row",
-    height: 2,
-    marginBottom: SPACING * 1.5,
-  },
+  dividerRow: { flexDirection: "row", height: 2, marginBottom: SPACING * 1.5 },
   divider: { flex: 1, backgroundColor: "transparent" },
   dividerActive: { backgroundColor: "#000" },
-  
-  // Grid items
   gridItem: {
     width: ITEM_SIZE,
     height: ITEM_SIZE,
@@ -680,22 +595,9 @@ const styles = StyleSheet.create({
     backgroundColor: "#f0f0f0",
     position: "relative",
   },
-  gridImage: {
-    width: "100%",
-    height: "100%",
-  },
-  
-  // Video Container
-  videoContainer: {
-    width: "100%",
-    height: "100%",
-    backgroundColor: "#000",
-  },
-  gridVideoWeb: {
-    width: "100%",
-    height: "100%",
-    objectFit: "cover",
-  },
+  gridImage: { width: "100%", height: "100%" },
+  videoContainer: { width: "100%", height: "100%", backgroundColor: "#000" },
+  gridVideoWeb: { width: "100%", height: "100%", objectFit: "cover" },
   videoPlaceholder: {
     width: "100%",
     height: "100%",
@@ -703,13 +605,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: "#1a1a1a",
   },
-  videoPlaceholderText: {
-    color: "#888",
-    fontSize: 12,
-    marginTop: 8,
-  },
-  
-  // Play Button Overlay
+  videoPlaceholderText: { color: "#888", fontSize: 12, marginTop: 8 },
   playButtonOverlay: {
     position: "absolute",
     top: "50%",
@@ -724,14 +620,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  
-  // Video Info Overlay
-  videoInfoOverlay: {
-    position: "absolute",
-    bottom: 4,
-    left: 4,
-    right: 4,
-  },
+  videoInfoOverlay: { position: "absolute", bottom: 4, left: 4, right: 4 },
   videoTypeIcon: {
     position: "absolute",
     top: 4,
@@ -755,22 +644,13 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 2,
   },
-  playIcon: {
-    position: "absolute",
-    top: 8,
-    right: 8,
-  },
-  
-  // Loading and error states
+  playIcon: { position: "absolute", top: 8, right: 8 },
   loadingItem: {
     justifyContent: "center",
     alignItems: "center",
     backgroundColor: "#f0f0f0",
   },
-  loadingText: {
-    color: "#666",
-    fontSize: 12,
-  },
+  loadingText: { color: "#666", fontSize: 12 },
   errorItem: {
     justifyContent: "center",
     alignItems: "center",
@@ -790,38 +670,12 @@ const styles = StyleSheet.create({
     textAlign: "center",
     opacity: 0.8,
   },
-  
-  // Cleanup button
-  cleanupButton: {
-    flexDirection: "row",
-    alignSelf: "center",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#ff6b6b",
-    borderRadius: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    marginBottom: SPACING,
-  },
-  cleanupButtonText: {
-    color: "#ff6b6b",
-    fontSize: 12,
-    fontWeight: "600",
-    marginRight: 6,
-  },
-  
-  // Empty state
   emptyState: {
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: 40,
   },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#666",
-    marginTop: 16,
-  },
+  emptyTitle: { fontSize: 18, fontWeight: "600", color: "#666", marginTop: 16 },
   emptySubtitle: {
     fontSize: 14,
     color: "#aaa",
@@ -829,8 +683,6 @@ const styles = StyleSheet.create({
     marginTop: 8,
     paddingHorizontal: 32,
   },
-  
-  // Loading state
   loadingContainer: {
     flex: 1,
     justifyContent: "center",
