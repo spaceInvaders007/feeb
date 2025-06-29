@@ -12,8 +12,8 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
-import { FeebStorage, Feeb } from "../utils/FeebStorage";
 import SideBySidePlayer from "../components/SideBySidePlayer";
+import { Feeb, FeebStorage } from "../utils/FeebStorage";
 
 const screenWidth = Dimensions.get("window").width;
 const SPACING = 8;
