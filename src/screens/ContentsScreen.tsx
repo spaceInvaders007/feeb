@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -6,10 +6,12 @@ import {
   TouchableOpacity,
   Image,
   Dimensions,
+  Platform,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import { VideoView, useVideoPlayer } from 'expo-video';
+import { Asset } from 'expo-asset';
 
 const screenWidth = Dimensions.get("window").width;
 
@@ -18,8 +20,34 @@ export default function ContentsScreen() {
 
   const [videoStarted, setVideoStarted] = useState(false);
   const [thumbnailError, setThumbnailError] = useState(false);
+  const [localVideoUri, setLocalVideoUri] = useState<string>('');
 
-  const videoUri = "https://samplelib.com/lib/preview/mp4/sample-5s.mp4";
+  // Load local video URI based on platform
+  useEffect(() => {
+    const loadLocalVideo = async () => {
+      if (Platform.OS === 'web') {
+        // For web, video should be in public/videos folder
+        setLocalVideoUri('/videos/test-video.mp4');
+      } else {
+        // For mobile, load from assets bundle
+        try {
+          const asset = Asset.fromModule(require('../../assets/videos/test-video.mp4'));
+          await asset.downloadAsync();
+          setLocalVideoUri(asset.uri);
+          console.log('Local video loaded for mobile:', asset.uri);
+        } catch (error) {
+          console.error('Error loading local video, using fallback:', error);
+          // Fallback to online video if local file not found
+          setLocalVideoUri("https://samplelib.com/lib/preview/mp4/sample-5s.mp4");
+        }
+      }
+    };
+    
+    loadLocalVideo();
+  }, []);
+
+  // Use localVideoUri, with online fallback if not loaded yet
+  const videoUri = localVideoUri || "https://samplelib.com/lib/preview/mp4/sample-5s.mp4";
 
   // Better thumbnail URLs that are more reliable
   const thumbnailUri = thumbnailError 
