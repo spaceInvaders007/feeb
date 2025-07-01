@@ -4,10 +4,14 @@
   "version": "1.0.0",
   "main": "index.ts",
   "scripts": {
-    "start": "expo start",
+    "start": "expo start --clear",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "tunnel": "expo start --web --tunnel",
+    "dev":"npx expo start --dev-client",
+    "build":"eas build --profile development --platform android"
+
   },
   "dependencies": {
     "@expo/metro-runtime": "~5.0.4",
@@ -16,6 +20,7 @@
     "@react-navigation/native": "^7.1.14",
     "@react-navigation/native-stack": "^7.3.20",
     "expo": "~53.0.12",
+    "expo-av": "~15.1.6",
     "expo-camera": "~16.1.9",
     "expo-file-system": "~18.1.0",
     "expo-status-bar": "~2.2.3",
@@ -24,10 +29,11 @@
     "react": "19.0.0",
     "react-dom": "19.0.0",
     "react-native": "0.79.4",
+    "react-native-audio-recorder-player": "^3.6.14",
+    "react-native-permissions": "^5.4.1",
     "react-native-safe-area-context": "^5.5.0",
     "react-native-screens": "^4.11.1",
-    "react-native-web": "^0.20.0",
-    "expo-av": "~15.1.6"
+    "react-native-web": "^0.20.0"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
