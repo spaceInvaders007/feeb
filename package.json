@@ -9,11 +9,11 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "tunnel": "expo start --web --tunnel",
-    "dev":"npx expo start --dev-client",
-    "build":"eas build --profile development --platform android"
-
+    "dev": "npx expo start --dev-client",
+    "build": "eas build --profile development --platform android"
   },
   "dependencies": {
+    "@expo/config-plugins": "^10.0.3",
     "@expo/metro-runtime": "~5.0.4",
     "@react-native-async-storage/async-storage": "^2.1.0",
     "@react-navigation/bottom-tabs": "^7.4.1",
@@ -22,7 +22,9 @@
     "expo": "~53.0.12",
     "expo-av": "~15.1.6",
     "expo-camera": "~16.1.9",
+    "expo-dev-client": "~5.2.2",
     "expo-file-system": "~18.1.0",
+    "expo-headphone-detection": "file:modules/expo-headphone-detection",
     "expo-status-bar": "~2.2.3",
     "expo-video": "~2.1.1",
     "prettier": "^3.6.0",

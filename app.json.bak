@@ -28,10 +28,7 @@
         "WRITE_EXTERNAL_STORAGE",
         "MODIFY_AUDIO_SETTINGS",
         "BLUETOOTH",
-        "BLUETOOTH_ADMIN",
-        "android.permission.CAMERA",
-        "android.permission.RECORD_AUDIO",
-        "android.permission.MODIFY_AUDIO_SETTINGS"
+        "BLUETOOTH_ADMIN"
       ],
       "package": "com.yourcompany.feeb"
     },
@@ -47,7 +44,7 @@
         }
       ],
       [
-        "expo-av",
+        "expo-av", 
         {
           "microphonePermission": "Allow Feeb to access your microphone to record audio."
         }
@@ -55,7 +52,6 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "56d9b1ec-e143-4ab2-a906-9e424f45e203"
       }
     }
   }

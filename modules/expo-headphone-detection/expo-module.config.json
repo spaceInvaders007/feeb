@@ -1,0 +1,9 @@
+{
+  "platforms": ["ios", "android", "web"],
+  "ios": {
+    "modules": ["ExpoHeadphoneDetectionModule"]
+  },
+  "android": {
+    "modules": ["expo.modules.headphonedetection.ExpoHeadphoneDetectionModule"]
+  }
+}

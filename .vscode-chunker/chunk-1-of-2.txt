@@ -1,421 +1,2581 @@
 
 
-// File: index.ts
-import { registerRootComponent } from 'expo';
+// File: src/hooks/useHeadphoneDetection.ts
+import { useState, useEffect, useCallback, useRef } from 'react';
 
-import App from './App';
-
-// registerRootComponent calls AppRegistry.registerComponent('main', () => App);
-// It also ensures that whether you load the app in Expo Go or in a native build,
-// the environment is set up appropriately
-registerRootComponent(App);
-
-
-// File: tsconfig.json
-{
-  "extends": "expo/tsconfig.base",
-  "compilerOptions": {
-    "strict": true,
-    // turn off checking of default lib files (speeds up builds & avoids weird missing-lib errors)
-    "skipLibCheck": true,
-    // explicitly list the runtime libs you need (no more “node 2”!)
-    "lib": ["ESNext", "DOM", "DOM.Iterable"],
-    // pick only the @types packages you actually use
-    "types": ["react", "react-native"],
-    // where to look for those @types
-    "typeRoots": ["./node_modules/@types"]
-  },
-  // don't accidentally include things under node_modules
-  "exclude": ["node_modules"]
+interface HeadphoneInfo {
+  isConnected: boolean;
+  deviceType: 'wired' | 'bluetooth' | 'none';
+  deviceName: string;
 }
 
+export const useHeadphoneDetection = () => {
+  const [headphoneInfo, setHeadphoneInfo] = useState<HeadphoneInfo>({
+    isConnected: false,
+    deviceType: 'none',
+    deviceName: ''
+  });
+  const [isInitialized, setIsInitialized] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  
+  // Use ref to track subscription to prevent memory leaks
+  const subscriptionRef = useRef<any>(null);
+  const isMountedRef = useRef(true);
 
-// File: package.json
-{
-  "name": "feeb",
-  "license": "0BSD",
-  "version": "1.0.0",
-  "main": "index.ts",
-  "scripts": {
-    "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
-    "web": "expo start --web"
-  },
-  "dependencies": {
-    "@expo/metro-runtime": "~5.0.4",
-    "@react-native-async-storage/async-storage": "^2.1.0",
-    "@react-navigation/bottom-tabs": "^7.4.1",
-    "@react-navigation/native": "^7.1.14",
-    "@react-navigation/native-stack": "^7.3.20",
-    "expo": "~53.0.12",
-    "expo-camera": "~16.1.9",
-    "expo-file-system": "~18.1.0",
-    "expo-status-bar": "~2.2.3",
-    "expo-video": "~2.1.1",
-    "prettier": "^3.6.0",
-    "react": "19.0.0",
-    "react-dom": "19.0.0",
-    "react-native": "0.79.4",
-    "react-native-safe-area-context": "^5.5.0",
-    "react-native-screens": "^4.11.1",
-    "react-native-web": "^0.20.0",
-    "expo-av": "~15.1.6"
-  },
-  "devDependencies": {
-    "@babel/core": "^7.25.2",
-    "@types/react": "~19.0.10",
-    "@types/react-native": "^0.72.8",
-    "typescript": "~5.8.3"
-  },
-  "private": true
-}
-
-
-// File: utils/FeebStorage.ts
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as FileSystem from 'expo-file-system';
-import { Platform } from 'react-native';
-
-export interface Feeb {
-  id: string;
-  uri: string; // Local file path or persistent data URL for web
-  originalVideoUri: string; // The video they reacted to
-  createdAt: string;
-  thumbnail?: string; // Optional thumbnail
-  isWebBlob?: boolean; // Flag to indicate if it's a web blob (now converted to data URL)
-}
-
-const FEEBS_STORAGE_KEY = 'user_feebs';
-const WEB_VIDEO_STORAGE_KEY = 'web_video_data_';
-
-export class FeebStorage {
-  // Get all user's feebs
-  static async getAllFeebs(): Promise<Feeb[]> {
+  const checkHeadphones = useCallback(async () => {
     try {
-      const feebsJson = await AsyncStorage.getItem(FEEBS_STORAGE_KEY);
-      const feebs = feebsJson ? JSON.parse(feebsJson) : [];
+      const status = await HeadphoneDetection.getCurrentStatus();
       
-      // Clean up any old blob URLs automatically
-      if (Platform.OS === 'web') {
-        const cleanedFeebs = feebs.filter((feeb: Feeb) => {
-          if (feeb.isWebBlob && feeb.uri.startsWith('blob:')) {
-            console.log('🧹 Automatically removing feeb with expired blob URL:', feeb.id);
-            return false;
-          }
-          return true;
-        });
-        
-        // If we removed any feebs, save the cleaned list
-        if (cleanedFeebs.length !== feebs.length) {
-          await AsyncStorage.setItem(FEEBS_STORAGE_KEY, JSON.stringify(cleanedFeebs));
-          console.log(`🧹 Cleaned up ${feebs.length - cleanedFeebs.length} feebs with expired blob URLs`);
-        }
-        
-        return cleanedFeebs;
+      // Only update state if component is still mounted
+      if (isMountedRef.current) {
+        setHeadphoneInfo(status);
+        setError(null);
       }
       
-      return feebs;
-    } catch (error) {
-      console.error('Error loading feebs:', error);
-      return [];
-    }
-  }
-
-  // Save a new feeb
-  static async saveFeeb(feeb: Feeb): Promise<void> {
-    try {
-      const existingFeebs = await this.getAllFeebs();
-      const updatedFeebs = [feeb, ...existingFeebs]; // Add new feeb at the beginning
-      await AsyncStorage.setItem(FEEBS_STORAGE_KEY, JSON.stringify(updatedFeebs));
-      console.log('✅ Feeb saved successfully:', feeb.id);
-    } catch (error) {
-      console.error('Error saving feeb:', error);
-      throw error;
-    }
-  }
-
-  // Web-specific: Save video blob to persistent storage
-  static async saveWebVideoBlob(blob: Blob): Promise<string> {
-    try {
-      console.log('🌐 Converting blob to persistent storage...');
-      console.log('📊 Blob info:', { size: blob.size, type: blob.type });
+      console.log('🎧 Headphone status:', status);
+      return status;
+    } catch (err: any) {
+      console.error('❌ Headphone detection error:', err);
       
-      // Convert blob to data URL for persistence
-      const dataUrl = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => {
-          console.log('📖 FileReader completed');
-          resolve(reader.result as string);
-        };
-        reader.onerror = (error) => {
-          console.error('❌ FileReader error:', error);
-          reject(error);
-        };
-        reader.readAsDataURL(blob);
-        console.log('📖 Starting FileReader...');
-      });
-
-      console.log('✅ Data URL created, length:', dataUrl.length);
-
-      // Generate unique ID for this video
-      const videoId = `feeb_video_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      console.log('🆔 Generated video ID:', videoId);
-      
-      // Store the data URL in AsyncStorage with a unique key
-      const storageKey = WEB_VIDEO_STORAGE_KEY + videoId;
-      console.log('💾 Storing with key:', storageKey);
-      
-      // For large data URLs, we might need to chunk them
-      const chunkSize = 1000000; // 1MB chunks
-      if (dataUrl.length > chunkSize) {
-        console.log('📦 Large data URL detected, chunking...');
-        const chunks = [];
-        for (let i = 0; i < dataUrl.length; i += chunkSize) {
-          chunks.push(dataUrl.substring(i, i + chunkSize));
-        }
-        
-        // Store chunk count first
-        await AsyncStorage.setItem(`${storageKey}_chunks`, chunks.length.toString());
-        
-        // Store each chunk
-        for (let i = 0; i < chunks.length; i++) {
-          await AsyncStorage.setItem(`${storageKey}_chunk_${i}`, chunks[i]);
-        }
-        
-        console.log(`💾 Stored ${chunks.length} chunks for video:`, videoId);
-      } else {
-        await AsyncStorage.setItem(storageKey, dataUrl);
-        console.log('💾 Stored single data URL for video:', videoId);
+      if (isMountedRef.current) {
+        setError(err.message || 'Failed to detect headphones');
       }
-      
-      console.log('💾 Web video saved to persistent storage:', videoId);
-      console.log('📊 Data URL size:', Math.round(dataUrl.length / 1024), 'KB');
-      
-      // Return the video ID as the persistent URI
-      return videoId;
-    } catch (error) {
-      console.error('❌ Error saving web video blob:', error);
-      throw error;
-    }
-  }
-
-  // Web-specific: Retrieve video data URL from storage
-  static async getWebVideoDataUrl(videoId: string): Promise<string | null> {
-    try {
-      const storageKey = WEB_VIDEO_STORAGE_KEY + videoId;
-      
-      // Check if it's chunked
-      const chunkCountStr = await AsyncStorage.getItem(`${storageKey}_chunks`);
-      
-      if (chunkCountStr) {
-        // Reassemble from chunks
-        const chunkCount = parseInt(chunkCountStr, 10);
-        console.log(`📦 Reassembling ${chunkCount} chunks for video:`, videoId);
-        
-        const chunks = [];
-        for (let i = 0; i < chunkCount; i++) {
-          const chunk = await AsyncStorage.getItem(`${storageKey}_chunk_${i}`);
-          if (chunk) {
-            chunks.push(chunk);
-          } else {
-            console.error(`❌ Missing chunk ${i} for video:`, videoId);
-            return null;
-          }
-        }
-        
-        const dataUrl = chunks.join('');
-        console.log('✅ Retrieved chunked web video data URL for:', videoId);
-        return dataUrl;
-      } else {
-        // Single data URL
-        const dataUrl = await AsyncStorage.getItem(storageKey);
-        if (dataUrl) {
-          console.log('✅ Retrieved web video data URL for:', videoId);
-          return dataUrl;
-        } else {
-          console.log('❌ No data URL found for video ID:', videoId);
-          return null;
-        }
-      }
-    } catch (error) {
-      console.error('❌ Error retrieving web video:', error);
       return null;
     }
+  }, []);
+
+  // Initialize detection on mount
+  useEffect(() => {
+    isMountedRef.current = true;
+
+    const initializeDetection = async () => {
+      try {
+        // Get initial status
+        await checkHeadphones();
+        
+        // Set up real-time listener
+        subscriptionRef.current = HeadphoneDetection.addListener(
+          'headphoneStatusChanged', 
+          (info: HeadphoneInfo) => {
+            console.log('🔄 Headphone status changed:', info);
+            if (isMountedRef.current) {
+              setHeadphoneInfo(info);
+            }
+          }
+        );
+        
+        // Start listening for device changes
+        HeadphoneDetection.startListening();
+        
+        if (isMountedRef.current) {
+          setIsInitialized(true);
+        }
+      } catch (err: any) {
+        console.error('❌ Failed to initialize headphone detection:', err);
+        if (isMountedRef.current) {
+          setError(err.message || 'Initialization failed');
+        }
+      }
+    };
+
+    initializeDetection();
+
+    // Cleanup function
+    return () => {
+      isMountedRef.current = false;
+      
+      if (subscriptionRef.current) {
+        subscriptionRef.current.remove();
+        subscriptionRef.current = null;
+      }
+      
+      HeadphoneDetection.stopListening();
+    };
+  }, [checkHeadphones]);
+
+  // Return hook interface
+  return {
+    // Individual properties
+    isConnected: headphoneInfo.isConnected,
+    deviceType: headphoneInfo.deviceType,
+    deviceName: headphoneInfo.deviceName,
+    
+    // Status properties
+    isInitialized,
+    error,
+    
+    // Methods
+    checkHeadphones,
+    
+    // Convenience getters
+    hasHeadphones: headphoneInfo.isConnected,
+    isWired: headphoneInfo.deviceType === 'wired',
+    isBluetooth: headphoneInfo.deviceType === 'bluetooth',
+  };
+};
+
+// File: src/components/SideBySidePlayer.tsx
+// components/SideBySidePlayer.tsx
+import React, { useState, useEffect } from "react";
+import {
+  View,
+  StyleSheet,
+  TouchableOpacity,
+  Text,
+  Dimensions,
+  Modal,
+  Platform,
+} from "react-native";
+import { VideoView, useVideoPlayer } from "expo-video";
+import { Ionicons } from "@expo/vector-icons";
+
+const { width: screenWidth } = Dimensions.get("window");
+
+interface SideBySidePlayerProps {
+  visible: boolean;
+  originalVideoUri: string;
+  reactionVideoUri: string;
+  onClose: () => void;
+  feebId: string;
+  createdAt: string;
+  isWebBlob?: boolean;
+}
+
+export default function SideBySidePlayer({
+  visible,
+  originalVideoUri,
+  reactionVideoUri,
+  onClose,
+  feebId,
+  createdAt,
+  isWebBlob,
+}: SideBySidePlayerProps) {
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+
+  // Create two players with different audio settings
+  const originalPlayer = useVideoPlayer(originalVideoUri, (player) => {
+    player.loop = false;
+    player.muted = true; // MUTE the original video - we only want reaction audio
+  });
+  
+  const reactionPlayer = useVideoPlayer(reactionVideoUri, (player) => {
+    player.loop = false;
+    player.muted = false; // UNMUTE the reaction video - this has the user's audio
+  });
+
+  // When both players are ready, capture duration from the original video
+  useEffect(() => {
+    const sub = originalPlayer.addListener("statusChange", (status) => {
+      if (status.status === "readyToPlay" && originalPlayer.duration > 0) {
+        setDuration(originalPlayer.duration);
+        console.log('📏 Original video duration:', originalPlayer.duration);
+      }
+    });
+    return () => sub.remove();
+  }, [originalPlayer]);
+
+  // Log when reaction player is ready
+  useEffect(() => {
+    const sub = reactionPlayer.addListener("statusChange", (status) => {
+      if (status.status === "readyToPlay") {
+        console.log('🎬 Reaction video ready, duration:', reactionPlayer.duration);
+      }
+    });
+    return () => sub.remove();
+  }, [reactionPlayer]);
+
+  // Sync play/pause
+  useEffect(() => {
+    if (!visible) return;
+    
+    console.log('🎵 Audio settings:', {
+      originalMuted: originalPlayer.muted,
+      reactionMuted: reactionPlayer.muted,
+      isPlaying
+    });
+    
+    if (isPlaying) {
+      originalPlayer.play();
+      reactionPlayer.play();
+      
+      // For web data URLs, also control the HTML video element
+      if (isWebBlob && reactionVideoUri.startsWith("data:")) {
+        const videoElements = document.querySelectorAll('video[src^="data:video"]') as NodeListOf<HTMLVideoElement>;
+        videoElements.forEach((video) => {
+          if (video.src === reactionVideoUri) {
+            video.currentTime = originalPlayer.currentTime;
+            video.muted = false; // Ensure web video audio is enabled
+            video.play().catch(console.error);
+            console.log('🌐 Web video audio enabled, muted:', video.muted);
+          }
+        });
+      }
+    } else {
+      originalPlayer.pause();
+      reactionPlayer.pause();
+      
+      if (isWebBlob && reactionVideoUri.startsWith("data:")) {
+        const videoElements = document.querySelectorAll('video[src^="data:video"]') as NodeListOf<HTMLVideoElement>;
+        videoElements.forEach((video) => {
+          if (video.src === reactionVideoUri) {
+            video.pause();
+          }
+        });
+      }
+    }
+  }, [isPlaying, visible, originalPlayer, reactionPlayer, isWebBlob, reactionVideoUri]);
+
+  // Keep videos in sync
+  useEffect(() => {
+    if (!visible) return;
+    
+    const syncInterval = setInterval(() => {
+      if (originalPlayer.playing) {
+        const originalTime = originalPlayer.currentTime;
+        setCurrentTime(originalTime);
+        
+        // Sync reaction video to original video timing
+        const timeDiff = Math.abs(originalTime - reactionPlayer.currentTime);
+        if (timeDiff > 0.3) { // Allow 300ms tolerance
+          console.log(`⏱️ Syncing videos: original=${originalTime.toFixed(2)}s, reaction=${reactionPlayer.currentTime.toFixed(2)}s`);
+          reactionPlayer.currentTime = originalTime;
+          
+          // Also sync web video if applicable
+          if (isWebBlob && reactionVideoUri.startsWith("data:")) {
+            const videoElements = document.querySelectorAll('video[src^="data:video"]') as NodeListOf<HTMLVideoElement>;
+            videoElements.forEach((video) => {
+              if (video.src === reactionVideoUri && Math.abs(video.currentTime - originalTime) > 0.3) {
+                video.currentTime = originalTime;
+              }
+            });
+          }
+        }
+      }
+    }, 100);
+    
+    return () => clearInterval(syncInterval);
+  }, [visible, originalPlayer, reactionPlayer, isWebBlob, reactionVideoUri]);
+
+  // Reset on open
+  useEffect(() => {
+    if (visible) {
+      console.log('🔄 Resetting player state');
+      originalPlayer.currentTime = 0;
+      reactionPlayer.currentTime = 0;
+      setCurrentTime(0);
+      setIsPlaying(false);
+      
+      // Ensure correct audio settings
+      originalPlayer.muted = true;
+      reactionPlayer.muted = false;
+      
+      console.log('🎵 Reset audio settings - Original muted:', originalPlayer.muted, 'Reaction muted:', reactionPlayer.muted);
+    }
+  }, [visible, originalPlayer, reactionPlayer]);
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60).toString().padStart(2, "0");
+    return `${mins}:${secs}`;
+  };
+
+  const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
+
+  const handleSeek = (e: any) => {
+    const x = e.nativeEvent.locationX;
+    const containerWidth = screenWidth - 80; // Space for time labels
+    const percentage = Math.min(1, Math.max(0, x / containerWidth));
+    const newTime = percentage * duration;
+    
+    console.log('⏭️ Seeking to:', newTime.toFixed(2), 's');
+    
+    originalPlayer.currentTime = newTime;
+    reactionPlayer.currentTime = newTime;
+    setCurrentTime(newTime);
+    
+    // Also seek web video
+    if (isWebBlob && reactionVideoUri.startsWith("data:")) {
+      const videoElements = document.querySelectorAll('video[src^="data:video"]') as NodeListOf<HTMLVideoElement>;
+      videoElements.forEach((video) => {
+        if (video.src === reactionVideoUri) {
+          video.currentTime = newTime;
+        }
+      });
+    }
+  };
+
+  const handleRestart = () => {
+    console.log('⏮️ Restarting videos');
+    originalPlayer.currentTime = 0;
+    reactionPlayer.currentTime = 0;
+    setCurrentTime(0);
+    
+    if (isWebBlob && reactionVideoUri.startsWith("data:")) {
+      const videoElements = document.querySelectorAll('video[src^="data:video"]') as NodeListOf<HTMLVideoElement>;
+      videoElements.forEach((video) => {
+        if (video.src === reactionVideoUri) {
+          video.currentTime = 0;
+        }
+      });
+    }
+  };
+
+  const handleEnd = () => {
+    console.log('⏭️ Jumping to end');
+    const endTime = duration;
+    originalPlayer.currentTime = endTime;
+    reactionPlayer.currentTime = endTime;
+    setCurrentTime(endTime);
+    
+    if (isWebBlob && reactionVideoUri.startsWith("data:")) {
+      const videoElements = document.querySelectorAll('video[src^="data:video"]') as NodeListOf<HTMLVideoElement>;
+      videoElements.forEach((video) => {
+        if (video.src === reactionVideoUri) {
+          video.currentTime = endTime;
+        }
+      });
+    }
+  };
+
+  if (!visible) return null;
+
+  return (
+    <Modal visible={visible} animationType="slide" onRequestClose={onClose} statusBarTranslucent>
+      <View style={styles.container}>
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+            <Ionicons name="arrow-back" size={24} color="white" />
+          </TouchableOpacity>
+          <View style={styles.headerInfo}>
+            <Text style={styles.timestamp}>{new Date(createdAt).toLocaleString()}</Text>
+            <Text style={styles.audioInfo}>🎵 Reaction audio only</Text>
+          </View>
+        </View>
+
+        {/* Original video (top half) - MUTED */}
+        <View style={styles.videoWrapper}>
+          <VideoView 
+            style={styles.video} 
+            player={originalPlayer} 
+            showsTimecodes={false} 
+          />
+          <View style={styles.videoLabel}>
+            <Text style={styles.labelText}>Original (Silent)</Text>
+          </View>
+        </View>
+
+        {/* Reaction video (bottom half) - WITH AUDIO */}
+        <View style={styles.videoWrapper}>
+          {isWebBlob && reactionVideoUri.startsWith("data:") ? (
+            <video
+              src={reactionVideoUri}
+              style={styles.video as any}
+              muted={false} // Ensure web video has audio
+              onTimeUpdate={(e) => {
+                const video = e.currentTarget as HTMLVideoElement;
+                const timeDiff = Math.abs(originalPlayer.currentTime - video.currentTime);
+                if (timeDiff > 0.3) {
+                  video.currentTime = originalPlayer.currentTime;
+                }
+              }}
+              onLoadedMetadata={(e) => {
+                const video = e.currentTarget as HTMLVideoElement;
+                // Check if video has audio - use a more compatible approach
+                console.log('🌐 Web video loaded, checking for audio tracks');
+              }}
+            />
+          ) : (
+            <VideoView 
+              style={styles.video} 
+              player={reactionPlayer} 
+              showsTimecodes={false} 
+            />
+          )}
+          <View style={styles.videoLabel}>
+            <Text style={styles.labelText}>Your Reaction (With Audio)</Text>
+          </View>
+        </View>
+
+        {/* Controls */}
+        <View style={styles.controls}>
+          {/* Progress bar */}
+          <View style={styles.progressRow}>
+            <Text style={styles.timeText}>{formatTime(currentTime)}</Text>
+            <TouchableOpacity
+              style={styles.progressBarContainer}
+              activeOpacity={1}
+              onPress={handleSeek}
+            >
+              <View style={styles.progressBar}>
+                <View style={[styles.progressFill, { width: `${progress}%` }]} />
+              </View>
+            </TouchableOpacity>
+            <Text style={styles.timeText}>{formatTime(duration)}</Text>
+          </View>
+
+          {/* Control buttons */}
+          <View style={styles.buttonsRow}>
+            <TouchableOpacity onPress={handleRestart}>
+              <Ionicons name="play-back" size={28} color="white" />
+            </TouchableOpacity>
+            
+            <TouchableOpacity onPress={() => setIsPlaying(prev => !prev)}>
+              <Ionicons name={isPlaying ? "pause" : "play"} size={36} color="white" />
+            </TouchableOpacity>
+            
+            <TouchableOpacity onPress={handleEnd}>
+              <Ionicons name="play-forward" size={28} color="white" />
+            </TouchableOpacity>
+          </View>
+          
+          {/* Audio indicator */}
+          <View style={styles.audioIndicator}>
+            <Ionicons name="volume-high" size={16} color="#00CFFF" />
+            <Text style={styles.audioIndicatorText}>Reaction audio enabled</Text>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { 
+    flex: 1, 
+    backgroundColor: "#000" 
+  },
+  
+  header: { 
+    flexDirection: "row", 
+    alignItems: "center", 
+    padding: 12, 
+    backgroundColor: "#111" 
+  },
+  closeButton: { 
+    marginRight: 16 
+  },
+  headerInfo: {
+    flex: 1
+  },
+  timestamp: { 
+    color: "#ccc",
+    fontSize: 14
+  },
+  audioInfo: {
+    color: "#00CFFF",
+    fontSize: 12,
+    marginTop: 2
+  },
+
+  videoWrapper: { 
+    flex: 1, 
+    backgroundColor: "#000",
+    position: "relative"
+  },
+  video: { 
+    width: "100%", 
+    height: "100%" 
+  },
+  videoLabel: {
+    position: "absolute",
+    top: 8,
+    left: 8,
+    backgroundColor: "rgba(0, 0, 0, 0.7)",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4
+  },
+  labelText: {
+    color: "white",
+    fontSize: 12,
+    fontWeight: "600"
+  },
+
+  controls: { 
+    padding: 16, 
+    backgroundColor: "#111" 
+  },
+  progressRow: { 
+    flexDirection: "row", 
+    alignItems: "center", 
+    marginBottom: 12 
+  },
+  timeText: { 
+    color: "#fff", 
+    width: 40, 
+    textAlign: "center",
+    fontSize: 12
+  },
+  progressBarContainer: { 
+    flex: 1,
+    paddingHorizontal: 8
+  },
+  progressBar: { 
+    height: 4, 
+    backgroundColor: "#333", 
+    borderRadius: 2 
+  },
+  progressFill: { 
+    height: "100%", 
+    backgroundColor: "#00CFFF",
+    borderRadius: 2
+  },
+
+  buttonsRow: { 
+    flexDirection: "row", 
+    justifyContent: "space-around", 
+    alignItems: "center",
+    marginBottom: 8
+  },
+  
+  audioIndicator: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 8
+  },
+  audioIndicatorText: {
+    color: "#00CFFF",
+    fontSize: 12,
+    marginLeft: 4
+  }
+});
+
+// File: src/components/HeadphoneStatus.tsx
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  Platform,
+  Alert,
+  Animated,
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useHeadphoneDetection } from '../hooks/useHeadphoneDetection';
+
+interface HeadphoneStatusProps {
+  showWarning?: boolean;
+  onStatusChange?: (connected: boolean) => void;
+  style?: any;
+}
+
+const HeadphoneStatus: React.FC<HeadphoneStatusProps> = ({ 
+  showWarning = true, 
+  onStatusChange,
+  style 
+}) => {
+  const {
+    hasHeadphones,
+    deviceType,
+    deviceName,
+    isInitialized,
+    error,
+    checkHeadphones
+  } = useHeadphoneDetection();
+
+  const [fadeAnim] = useState(() => new Animated.Value(0));
+
+  // Notify parent of status changes
+  useEffect(() => {
+    if (isInitialized && onStatusChange) {
+      onStatusChange(hasHeadphones);
+    }
+  }, [hasHeadphones, isInitialized, onStatusChange]);
+
+  // Handle warning visibility animation
+  useEffect(() => {
+    const shouldShow = showWarning && !hasHeadphones && isInitialized;
+    
+    Animated.timing(fadeAnim, {
+      toValue: shouldShow ? 1 : 0,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+  }, [showWarning, hasHeadphones, isInitialized, fadeAnim]);
+
+  // Memoize the detailed info handler
+  const showDetailedInfo = useCallback(() => {
+    if (error) {
+      Alert.alert(
+        '❌ Detection Error',
+        `Failed to detect headphones: ${error}`,
+        [
+          { text: 'Retry', onPress: checkHeadphones },
+          { text: 'Continue anyway', style: 'cancel' }
+        ]
+      );
+      return;
+    }
+
+    const message = hasHeadphones
+      ? `✅ Connected: ${deviceName}\nType: ${deviceType === 'bluetooth' ? 'Bluetooth' : 'Wired'}`
+      : `🎧 No headphones detected.\n\nFor the best experience:\n• Use headphones to avoid audio feedback\n• Ensure your device volume is appropriate\n• Consider using wireless earbuds for mobility`;
+
+    Alert.alert(
+      hasHeadphones ? 'Headphones Connected' : 'Headphones Recommended',
+      message,
+      hasHeadphones 
+        ? [{ text: 'OK' }]
+        : [
+            { text: 'Continue anyway', style: 'cancel' },
+            { text: 'Check again', onPress: checkHeadphones }
+          ]
+    );
+  }, [error, hasHeadphones, deviceName, deviceType, checkHeadphones]);
+
+  // Memoize styles to prevent unnecessary re-renders
+  const bannerStyle = useMemo(() => [
+    styles.banner,
+    error && styles.errorBanner
+  ], [error]);
+
+  const mainTextStyle = useMemo(() => [
+    styles.mainText,
+    error && styles.errorText
+  ], [error]);
+
+  const containerStyle = useMemo(() => [
+    styles.container,
+    style,
+    { opacity: fadeAnim }
+  ], [style, fadeAnim]);
+
+  // Don't render if headphones are connected or warning is disabled
+  if (!showWarning || hasHeadphones || !isInitialized) {
+    return null;
   }
 
-  // Save recorded video to permanent location (platform-specific)
-  static async saveVideoToPermanentLocation(tempUri: string): Promise<string> {
+  return (
+    <Animated.View style={containerStyle}>
+      <TouchableOpacity
+        style={bannerStyle}
+        onPress={showDetailedInfo}
+        activeOpacity={0.8}
+      >
+        <View style={styles.iconContainer}>
+          <Ionicons
+            name={error ? "warning" : "headset"}
+            size={20}
+            color={error ? "#FF6B6B" : "#FF9500"}
+          />
+        </View>
+
+        <View style={styles.textContainer}>
+          <Text style={mainTextStyle}>
+            {error ? 'Detection failed' : 'Headphones recommended'}
+          </Text>
+          <Text style={styles.subText}>
+            {error ? 'Tap to retry' : 'Tap for more info'}
+          </Text>
+        </View>
+
+        <TouchableOpacity
+          onPress={checkHeadphones}
+          style={styles.refreshButton}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <Ionicons name="refresh" size={16} color="#666" />
+        </TouchableOpacity>
+      </TouchableOpacity>
+    </Animated.View>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    position: 'absolute',
+    top: Platform.OS === 'web' ? 10 : 60,
+    left: 16,
+    right: 16,
+    zIndex: 1000,
+  },
+  banner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 149, 0, 0.1)',
+    borderColor: '#FF9500',
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  errorBanner: {
+    backgroundColor: 'rgba(255, 107, 107, 0.1)',
+    borderColor: '#FF6B6B',
+  },
+  iconContainer: {
+    marginRight: 12,
+  },
+  textContainer: {
+    flex: 1,
+  },
+  mainText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FF9500',
+    marginBottom: 2,
+  },
+  errorText: {
+    color: '#FF6B6B',
+  },
+  subText: {
+    fontSize: 12,
+    color: '#666',
+  },
+  refreshButton: {
+    padding: 8,
+    marginLeft: 8,
+  },
+});
+
+export default HeadphoneStatus;
+
+// File: src/components/ProfileTabs.tsx
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import React, { useState } from 'react';
+
+export default function ProfileTabs() {
+  const [active, setActive] = useState<'feebs' | 'contents'>('feebs');
+
+  return (
+    <View style={styles.wrapper}>
+      <TouchableOpacity
+        style={[styles.tab, active === 'feebs' && styles.active]}
+        onPress={() => setActive('feebs')}
+      >
+        <Text style={styles.label}>Feebs</Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={[styles.tab, active === 'contents' && styles.active]}
+        onPress={() => setActive('contents')}
+      >
+        <Text style={styles.label}>Contents</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  wrapper: {
+    flexDirection: 'row',
+    marginVertical: 16,
+  },
+  tab: {
+    flex: 1,
+    alignItems: 'center',
+    padding: 12,
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  active: {
+    borderBottomColor: '#00CFFF',
+  },
+  label: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+});
+
+
+// File: src/components/WebCamera.tsx
+// components/WebCamera.tsx
+import React, { useRef, useEffect, useState, useCallback } from 'react';
+import { View, StyleSheet, Platform, Text } from 'react-native';
+
+interface WebCameraProps {
+  isRecording: boolean;
+  onCameraReady: () => void;
+  onRecordingComplete: (videoBlob: Blob) => void;
+}
+
+export default function WebCamera({ isRecording, onCameraReady, onRecordingComplete }: WebCameraProps) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const recordingStateRef = useRef<'idle' | 'starting' | 'recording' | 'stopping'>('idle');
+  
+  const [hasPermission, setHasPermission] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [isInitializing, setIsInitializing] = useState(false);
+  const [debugInfo, setDebugInfo] = useState<string>('');
+
+  // Enhanced logging
+  const logState = useCallback((action: string, extra?: any) => {
+    console.log(`📷 [WebCamera-${action}]`, {
+      isRecording,
+      recordingState: recordingStateRef.current,
+      hasMediaRecorder: !!mediaRecorderRef.current,
+      mediaRecorderState: mediaRecorderRef.current?.state || 'none',
+      hasStream: !!streamRef.current,
+      ...extra
+    });
+  }, [isRecording]);
+
+  useEffect(() => {
     if (Platform.OS === 'web') {
-      // On web, this shouldn't be called anymore - use saveWebVideoBlob instead
-      console.warn('⚠️ saveVideoToPermanentLocation called on web - use saveWebVideoBlob instead');
-      return tempUri;
+      const timer = setTimeout(() => {
+        initializeCamera();
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+    return () => {
+      cleanup();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (Platform.OS === 'web' && hasPermission && streamRef.current && videoRef.current) {
+      console.log('🔗 Setting up video element with existing stream...');
+      videoRef.current.srcObject = streamRef.current;
+      videoRef.current.play().catch(console.log);
+    }
+  }, [hasPermission]);
+
+  // Enhanced recording state management
+  useEffect(() => {
+    if (Platform.OS === 'web' && hasPermission) {
+      logState('RECORDING_PROP_CHANGED');
+      
+      if (isRecording && recordingStateRef.current === 'idle') {
+        startRecording();
+      } else if (!isRecording && recordingStateRef.current === 'recording') {
+        stopRecording();
+      }
+    }
+  }, [isRecording, hasPermission, logState]);
+
+  const checkCameraAvailability = async () => {
+    try {
+      console.log('🔍 Checking camera and microphone availability...');
+      
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error('Media devices API not supported in this browser');
+      }
+
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const videoDevices = devices.filter(device => device.kind === 'videoinput');
+      const audioDevices = devices.filter(device => device.kind === 'audioinput');
+      
+      console.log('📱 Available devices:', { video: videoDevices.length, audio: audioDevices.length });
+      setDebugInfo(`Found ${videoDevices.length} camera(s) and ${audioDevices.length} microphone(s)`);
+
+      if (videoDevices.length === 0) {
+        throw new Error('No camera devices found on this device');
+      }
+
+      if (audioDevices.length === 0) {
+        console.warn('⚠️ No microphone found - recording will be video only');
+      }
+
+      return { videoDevices, audioDevices };
+    } catch (error) {
+      console.error('❌ Device availability check failed:', error);
+      throw error;
+    }
+  };
+
+  const initializeCamera = async () => {
+    if (isInitializing) {
+      console.log('⏳ Camera initialization already in progress...');
+      return;
     }
 
     try {
-      const fileName = `feeb_${Date.now()}.mp4`;
-      const permanentUri = `${FileSystem.documentDirectory}feebs/${fileName}`;
+      setIsInitializing(true);
+      setError(null);
+      console.log('🌐 Initializing web camera with audio...');
       
-      // Create feebs directory if it doesn't exist
-      const feebsDir = `${FileSystem.documentDirectory}feebs/`;
-      const dirInfo = await FileSystem.getInfoAsync(feebsDir);
-      if (!dirInfo.exists) {
-        await FileSystem.makeDirectoryAsync(feebsDir, { intermediates: true });
+      const { audioDevices } = await checkCameraAvailability();
+
+      // Try different constraint configurations, prioritizing audio + video
+      const constraintOptions = [
+        {
+          video: { 
+            facingMode: 'user',
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          }, 
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            sampleRate: 44100
+          }
+        },
+        {
+          video: { 
+            facingMode: 'user',
+            width: { ideal: 640 },
+            height: { ideal: 480 }
+          }, 
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true
+          }
+        },
+        {
+          video: { facingMode: 'user' }, 
+          audio: true 
+        },
+        {
+          video: true, 
+          audio: true 
+        },
+        // Fallback to video only if audio fails
+        {
+          video: true, 
+          audio: false 
+        }
+      ];
+
+      let stream: MediaStream | null = null;
+      let lastError: Error | null = null;
+      let usedAudio = false;
+
+      for (let i = 0; i < constraintOptions.length; i++) {
+        try {
+          console.log(`🎥 Attempting camera access with configuration ${i + 1}...`);
+          setDebugInfo(`Trying camera config ${i + 1}/${constraintOptions.length}`);
+          stream = await navigator.mediaDevices.getUserMedia(constraintOptions[i]);
+          
+          // Check if we got audio track
+          const audioTracks = stream.getAudioTracks();
+          const videoTracks = stream.getVideoTracks();
+          usedAudio = audioTracks.length > 0;
+          
+          console.log(`✅ Camera access successful with configuration ${i + 1}`);
+          console.log(`📊 Stream tracks: ${videoTracks.length} video, ${audioTracks.length} audio`);
+          setDebugInfo(`Camera ready! Video: ${videoTracks.length}, Audio: ${audioTracks.length}`);
+          break;
+        } catch (err) {
+          lastError = err as Error;
+          console.log(`❌ Configuration ${i + 1} failed:`, err);
+          setDebugInfo(`Config ${i + 1} failed: ${lastError.message}`);
+          continue;
+        }
       }
 
-      // Copy the temporary file to permanent location
-      await FileSystem.copyAsync({
-        from: tempUri,
-        to: permanentUri,
+      if (!stream) {
+        throw lastError || new Error('Failed to access camera with all configurations');
+      }
+
+      // Log stream details
+      stream.getTracks().forEach(track => {
+        console.log(`🎵 Track: ${track.kind} - ${track.label} - enabled: ${track.enabled}`);
       });
 
-      console.log('📁 Video saved to permanent location:', permanentUri);
-      return permanentUri;
+      streamRef.current = stream;
+
+      if (videoRef.current) {
+        console.log('📺 Setting up video element...');
+        videoRef.current.srcObject = stream;
+        videoRef.current.play().catch(console.log);
+      }
+
+      console.log('🚀 Stream ready, triggering callback');
+      setHasPermission(true);
+      setDebugInfo(`Camera ready! ${usedAudio ? 'With audio' : 'Video only'}`);
+      onCameraReady();
     } catch (error) {
-      console.error('Error saving video permanently:', error);
-      throw error;
+      console.error('❌ Failed to initialize camera:', error);
+      setHasPermission(false);
+      
+      let errorMessage = 'Failed to access camera and microphone';
+      if (error instanceof Error) {
+        if (error.name === 'NotFoundError') {
+          errorMessage = 'Camera or microphone not found. Please check your devices.';
+        } else if (error.name === 'NotAllowedError') {
+          errorMessage = 'Camera and microphone access denied. Please allow access and refresh.';
+        } else if (error.name === 'NotReadableError') {
+          errorMessage = 'Camera or microphone is busy. Close other applications and try again.';
+        } else if (error.message.includes('Media devices API not supported')) {
+          errorMessage = 'Media recording not supported. Please use Chrome, Firefox, or Safari.';
+        }
+      }
+      
+      setError(errorMessage);
+    } finally {
+      setIsInitializing(false);
     }
-  }
+  };
 
-  // Create a new feeb record
-  static createFeeb(videoUri: string, originalVideoUri: string): Feeb {
-    return {
-      id: `feeb_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      uri: videoUri,
-      originalVideoUri,
-      createdAt: new Date().toISOString(),
-      isWebBlob: Platform.OS === 'web',
-    };
-  }
+  const startRecording = useCallback(() => {
+    if (!streamRef.current) {
+      console.error('❌ No stream available for recording');
+      return;
+    }
 
-  // Delete a feeb (platform-specific cleanup)
-  static async deleteFeeb(feebId: string): Promise<void> {
+    if (recordingStateRef.current !== 'idle') {
+      console.log('⚠️ Recording not in idle state, current:', recordingStateRef.current);
+      return;
+    }
+
     try {
-      const feebs = await this.getAllFeebs();
-      const feebToDelete = feebs.find(feeb => feeb.id === feebId);
+      recordingStateRef.current = 'starting';
+      console.log('🎥 Starting web recording with audio...');
+      logState('START_RECORDING');
       
-      if (feebToDelete) {
-        // Clean up the video file/data
-        if (Platform.OS === 'web') {
-          // Remove from AsyncStorage if it's a web video ID
-          if (feebToDelete.isWebBlob && !feebToDelete.uri.startsWith('data:') && !feebToDelete.uri.startsWith('blob:')) {
-            const storageKey = WEB_VIDEO_STORAGE_KEY + feebToDelete.uri;
-            
-            // Check if it's chunked and clean up all chunks
-            const chunkCountStr = await AsyncStorage.getItem(`${storageKey}_chunks`);
-            if (chunkCountStr) {
-              const chunkCount = parseInt(chunkCountStr, 10);
-              console.log(`🗑️ Cleaning up ${chunkCount} chunks for video:`, feebToDelete.uri);
-              
-              // Remove chunk count
-              await AsyncStorage.removeItem(`${storageKey}_chunks`);
-              
-              // Remove all chunks
-              for (let i = 0; i < chunkCount; i++) {
-                await AsyncStorage.removeItem(`${storageKey}_chunk_${i}`);
-              }
-            } else {
-              // Remove single data URL
-              await AsyncStorage.removeItem(storageKey);
-            }
-            
-            console.log('🗑️ Web: Deleted video data for ID:', feebToDelete.uri);
-          }
-          // If it was an old blob URL, just log (already invalid anyway)
-          if (feebToDelete.uri.startsWith('blob:')) {
-            console.log('🗑️ Web: Old blob URL will be garbage collected');
-          }
-        } else {
-          // Delete the actual file on mobile
-          await FileSystem.deleteAsync(feebToDelete.uri, { idempotent: true });
-          console.log('🗑️ Mobile: Deleted video file');
+      // Check available tracks
+      const audioTracks = streamRef.current.getAudioTracks();
+      const videoTracks = streamRef.current.getVideoTracks();
+      console.log(`📊 Starting recording with ${videoTracks.length} video tracks and ${audioTracks.length} audio tracks`);
+
+      // Preferred MIME types that support audio
+      const mimeTypes = [
+        'video/webm;codecs=vp9,opus',
+        'video/webm;codecs=vp8,opus', 
+        'video/webm;codecs=h264,opus',
+        'video/webm',
+        'video/mp4'
+      ];
+
+      let mediaRecorder: MediaRecorder | null = null;
+      let selectedMimeType = '';
+
+      for (const mimeType of mimeTypes) {
+        if (MediaRecorder.isTypeSupported(mimeType)) {
+          console.log(`📼 Using MIME type: ${mimeType}`);
+          selectedMimeType = mimeType;
+          mediaRecorder = new MediaRecorder(streamRef.current, { 
+            mimeType,
+            audioBitsPerSecond: 128000,
+            videoBitsPerSecond: 2500000
+          });
+          break;
         }
       }
 
-      // Remove from feebs list
-      const updatedFeebs = feebs.filter(feeb => feeb.id !== feebId);
-      await AsyncStorage.setItem(FEEBS_STORAGE_KEY, JSON.stringify(updatedFeebs));
-      
+      if (!mediaRecorder) {
+        console.log('📼 Using default MediaRecorder settings');
+        mediaRecorder = new MediaRecorder(streamRef.current);
+        selectedMimeType = 'default';
+      }
+
+      const chunks: BlobPart[] = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          chunks.push(event.data);
+          console.log(`📊 Recording chunk: ${event.data.size} bytes (State: ${recordingStateRef.current})`);
+        }
+      };
+
+      mediaRecorder.onstop = () => {
+        console.log('🛑 Web recording stopped');
+        logState('RECORDING_STOPPED', { chunksCount: chunks.length });
+        
+        const videoBlob = new Blob(chunks, { type: selectedMimeType || 'video/webm' });
+        console.log(`📁 Created video blob: ${videoBlob.size} bytes, type: ${videoBlob.type}`);
+        
+        recordingStateRef.current = 'idle';
+        onRecordingComplete(videoBlob);
+      };
+
+      mediaRecorder.onerror = (event) => {
+        console.error('❌ MediaRecorder error:', event);
+        recordingStateRef.current = 'idle';
+        logState('RECORDING_ERROR', { error: event });
+      };
+
+      mediaRecorder.onstart = () => {
+        console.log('✅ MediaRecorder started');
+        recordingStateRef.current = 'recording';
+        logState('RECORDING_STARTED', { mimeType: selectedMimeType });
+      };
+
+      mediaRecorder.start(1000); // Collect data every second
+      mediaRecorderRef.current = mediaRecorder;
+      console.log('🎬 MediaRecorder.start() called');
+
     } catch (error) {
-      console.error('Error deleting feeb:', error);
-      throw error;
+      console.error('❌ Failed to start recording:', error);
+      recordingStateRef.current = 'idle';
+      logState('START_RECORDING_ERROR', { error });
+      setError('Failed to start recording. Please try again.');
     }
-  }
+  }, [logState, onRecordingComplete]);
 
-  // Helper: Check if a URI is a web video ID
-  static isWebVideoId(uri: string): boolean {
-    return Platform.OS === 'web' && !uri.startsWith('data:') && !uri.startsWith('blob:') && !uri.startsWith('http');
-  }
+  const stopRecording = useCallback(() => {
+    logState('STOP_RECORDING_CALLED');
+    
+    if (recordingStateRef.current !== 'recording') {
+      console.log('⚠️ Not in recording state, current:', recordingStateRef.current);
+      return;
+    }
 
-  // Helper: Get display URI for a feeb (handles web video IDs)
-  static async getFeebDisplayUri(feeb: Feeb): Promise<string> {
-    if (Platform.OS === 'web' && feeb.isWebBlob) {
-      // If it's an old blob URL, it's no longer valid
-      if (feeb.uri.startsWith('blob:')) {
-        console.log('⚠️ Old blob URL detected, cannot retrieve data:', feeb.uri);
-        return ''; // Return empty string to trigger error state
-      }
+    if (!mediaRecorderRef.current) {
+      console.log('⚠️ No MediaRecorder available');
+      recordingStateRef.current = 'idle';
+      return;
+    }
+
+    if (mediaRecorderRef.current.state !== 'recording') {
+      console.log('⚠️ MediaRecorder not in recording state:', mediaRecorderRef.current.state);
+      recordingStateRef.current = 'idle';
+      return;
+    }
+
+    try {
+      recordingStateRef.current = 'stopping';
+      console.log('🛑 Stopping web recording...');
+      logState('STOPPING_RECORDING');
       
-      // If it's already a data URL, return as-is
-      if (feeb.uri.startsWith('data:')) {
-        console.log('✅ Data URL found, returning directly');
-        return feeb.uri;
-      }
-      
-      // If it's a web video ID, retrieve the data URL
-      if (this.isWebVideoId(feeb.uri)) {
-        console.log('🔍 Retrieving data URL for video ID:', feeb.uri);
-        const dataUrl = await this.getWebVideoDataUrl(feeb.uri);
-        if (dataUrl) {
-          console.log('✅ Data URL retrieved successfully');
-          return dataUrl;
-        } else {
-          console.log('❌ Failed to retrieve data URL for video ID:', feeb.uri);
-          return ''; // Return empty string to trigger error state
-        }
+      mediaRecorderRef.current.stop();
+      mediaRecorderRef.current = null;
+    } catch (error) {
+      console.error('❌ Error stopping recording:', error);
+      recordingStateRef.current = 'idle';
+      logState('STOP_RECORDING_ERROR', { error });
+    }
+  }, [logState]);
+
+  const cleanup = () => {
+    console.log('🧹 Cleaning up camera resources...');
+    
+    // Stop recording if active
+    if (recordingStateRef.current === 'recording' && mediaRecorderRef.current) {
+      try {
+        mediaRecorderRef.current.stop();
+      } catch (e) {
+        console.log('Error stopping recorder during cleanup:', e);
       }
     }
     
-    // For mobile or direct URIs, return as-is
-    return feeb.uri;
+    // Clean up stream
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => {
+        track.stop();
+        console.log(`🛑 Stopped track: ${track.kind}`);
+      });
+      streamRef.current = null;
+    }
+    
+    // Reset refs
+    mediaRecorderRef.current = null;
+    recordingStateRef.current = 'idle';
+  };
+
+  if (Platform.OS !== 'web') {
+    return null;
   }
 
-  // Utility: Clear all invalid web videos (for debugging/cleanup)
-  static async clearInvalidWebVideos(): Promise<number> {
-    if (Platform.OS !== 'web') {
-      return 0;
-    }
+  if (error) {
+    return (
+      <View style={styles.errorContainer}>
+        <Text style={styles.errorTitle}>Camera/Microphone Error</Text>
+        <Text style={styles.errorMessage}>{error}</Text>
+        <Text style={styles.errorHint}>
+          Troubleshooting tips:{'\n'}
+          • Allow camera AND microphone permissions{'\n'}
+          • Close other apps using camera/microphone{'\n'}
+          • Try refreshing the page{'\n'}
+          • Use Chrome, Firefox, or Safari for best results
+        </Text>
+      </View>
+    );
+  }
 
-    try {
-      const feebs = await AsyncStorage.getItem(FEEBS_STORAGE_KEY);
-      const feebList: Feeb[] = feebs ? JSON.parse(feebs) : [];
-      
-      let deletedCount = 0;
-      const validFeebs = [];
-      
-      for (const feeb of feebList) {
-        if (feeb.isWebBlob && feeb.uri.startsWith('blob:')) {
-          console.log('🧹 Removing invalid blob URL feeb:', feeb.id);
-          deletedCount++;
-        } else {
-          validFeebs.push(feeb);
+  if (isInitializing || !hasPermission) {
+    return (
+      <View style={styles.loadingContainer}>
+        <Text style={styles.loadingText}>
+          {isInitializing ? 'Initializing camera and microphone...' : 'Waiting for camera...'}
+        </Text>
+        {debugInfo ? (
+          <Text style={styles.debugText}>{debugInfo}</Text>
+        ) : null}
+        {isInitializing ? (
+          <Text 
+            style={styles.retryButton}
+            onPress={() => {
+              console.log('🔄 Manual retry triggered');
+              setIsInitializing(false);
+              setTimeout(() => initializeCamera(), 100);
+            }}
+          >
+            Tap to retry
+          </Text>
+        ) : null}
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+      <video
+        ref={videoRef}
+        style={styles.video}
+        autoPlay
+        muted
+        playsInline
+      />
+      {/* Audio indicator */}
+      {streamRef.current && streamRef.current?.getAudioTracks().length > 0 && (
+        <View style={styles.audioIndicator}>
+          <Text style={styles.audioText}>🎤</Text>
+        </View>
+      )}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    position: 'relative',
+  },
+  video: {
+    width: '100%',
+    height: '100%',
+    objectFit: 'cover',
+  } as any,
+
+  audioIndicator: {
+    position: 'absolute',
+    top: 10,
+    left: 10,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    borderRadius: 12,
+    padding: 4,
+  },
+  audioText: {
+    fontSize: 16,
+  },
+
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+    backgroundColor: '#f8f8f8',
+  },
+  errorTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#d32f2f',
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  errorMessage: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 15,
+  },
+  errorHint: {
+    fontSize: 14,
+    color: '#888',
+    textAlign: 'left',
+    lineHeight: 20,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f0f0f0',
+  },
+  loadingText: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+  },
+  debugText: {
+    fontSize: 14,
+    color: '#888',
+    textAlign: 'center',
+    marginTop: 10,
+    fontStyle: 'italic',
+  },
+  retryButton: {
+    fontSize: 16,
+    color: '#00CFFF',
+    textAlign: 'center',
+    marginTop: 20,
+    textDecorationLine: 'underline',
+    cursor: 'pointer',
+  } as any,
+});
+
+// File: src/components/FeebCamera.tsx
+import React, { useEffect, useRef, useState } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
+import type { CameraRecordingOptions } from 'expo-camera';
+import { Ionicons } from '@expo/vector-icons';
+
+export default function FeebCamera() {
+  const [permission, requestPermission] = useCameraPermissions();
+  const [isRecording, setIsRecording] = useState(false);
+  const cameraRef = useRef<CameraView | null>(null);
+
+  const handleRecord = async () => {
+    if (!cameraRef.current) return;
+
+    if (isRecording) {
+      cameraRef.current.stopRecording();
+      setIsRecording(false);
+    } else {
+      setIsRecording(true);
+      try {
+        const recordingOptions: CameraRecordingOptions = {
+          // You can add options here if needed
+        };
+        const video = await cameraRef.current.recordAsync(recordingOptions);
+      } catch (error) {
+        console.error('Recording failed:', error);
+      } finally {
+        setIsRecording(false);
+      }
+    }
+  };
+
+  if (!permission) {
+    // Camera permissions are still loading
+    return <Text>Loading...</Text>;
+  }
+
+  if (!permission.granted) {
+    // Camera permissions are not granted yet
+    return (
+      <View style={styles.container}>
+        <Text style={styles.message}>We need your permission to show the camera</Text>
+        <TouchableOpacity onPress={requestPermission} style={styles.permissionButton}>
+          <Text style={styles.permissionButtonText}>Grant Permission</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  return (
+    <View style={{ flex: 1 }}>
+      <CameraView
+        ref={cameraRef}
+        style={{ flex: 1 }}
+        facing="front"
+        mode="video"
+      >
+        <TouchableOpacity style={styles.button} onPress={handleRecord}>
+          <Ionicons
+            name={isRecording ? 'square' : 'videocam'}
+            size={32}
+            color="white"
+          />
+        </TouchableOpacity>
+      </CameraView>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  message: {
+    textAlign: 'center',
+    marginBottom: 20,
+    fontSize: 16,
+  },
+  permissionButton: {
+    backgroundColor: '#00CFFF',
+    padding: 12,
+    borderRadius: 8,
+  },
+  permissionButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  button: {
+    position: 'absolute',
+    bottom: 40,
+    alignSelf: 'center',
+    backgroundColor: '#00CFFF',
+    padding: 14,
+    borderRadius: 40,
+  },
+});
+
+// File: src/screens/ContentsScreen.tsx
+import React, { useState, useEffect } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  Image,
+  Dimensions,
+  Platform,
+} from "react-native";
+import { useNavigation } from "@react-navigation/native";
+import { Ionicons } from "@expo/vector-icons";
+import { VideoView, useVideoPlayer } from 'expo-video';
+import { Asset } from 'expo-asset';
+
+const screenWidth = Dimensions.get("window").width;
+
+export default function ContentsScreen() {
+  const navigation = useNavigation<any>();
+
+  const [videoStarted, setVideoStarted] = useState(false);
+  const [thumbnailError, setThumbnailError] = useState(false);
+  const [localVideoUri, setLocalVideoUri] = useState<string>('');
+
+  // Load local video URI based on platform
+  useEffect(() => {
+    const loadLocalVideo = async () => {
+      if (Platform.OS === 'web') {
+        // For web, video should be in public/videos folder
+        setLocalVideoUri('/videos/test-video.mp4');
+      } else {
+        // For mobile, load from assets bundle
+        try {
+          const asset = Asset.fromModule(require('../../assets/videos/test-video.mp4'));
+          await asset.downloadAsync();
+          setLocalVideoUri(asset.uri);
+          console.log('Local video loaded for mobile:', asset.uri);
+        } catch (error) {
+          console.error('Error loading local video, using fallback:', error);
+          // Fallback to online video if local file not found
+          setLocalVideoUri("https://samplelib.com/lib/preview/mp4/sample-5s.mp4");
         }
       }
-      
-      if (deletedCount > 0) {
-        await AsyncStorage.setItem(FEEBS_STORAGE_KEY, JSON.stringify(validFeebs));
-        console.log(`🧹 Cleared ${deletedCount} invalid web videos`);
-      }
-      
-      return deletedCount;
-    } catch (error) {
-      console.error('Error clearing invalid web videos:', error);
-      return 0;
-    }
+    };
+    
+    loadLocalVideo();
+  }, []);
+
+  // Use localVideoUri, with online fallback if not loaded yet
+  const videoUri = localVideoUri || "https://samplelib.com/lib/preview/mp4/sample-5s.mp4";
+
+  // Better thumbnail URLs that are more reliable
+  const thumbnailUri = thumbnailError 
+    ? 'https://picsum.photos/640/360' // Fallback to Lorem Picsum
+    : 'https://images.unsplash.com/photo-1611162617474-5b21e879e113?w=640&h=360&fit=crop'; // Unsplash video thumbnail
+
+  // Setup video player
+  const player = useVideoPlayer(videoUri, (player) => {
+    player.loop = false;
+    player.muted = false;
+  });
+
+  return (
+    <View style={styles.container}>
+      <Text style={styles.header}>Contents</Text>
+      <View style={styles.card}>
+        <View style={styles.userRow}>
+          <Image
+            source={{ uri: "https://picsum.photos/100/100?random=1" }}
+            style={styles.avatar}
+          />
+          <View>
+            <Text style={styles.username}>
+              Lilian Espech • <Text style={styles.follow}>Following</Text>
+            </Text>
+            <Text style={styles.location}>Los Angeles, USA</Text>
+          </View>
+          <Text style={styles.time}>1 min ago</Text>
+        </View>
+
+        {/* Thumbnail or video */}
+        <TouchableOpacity
+          activeOpacity={0.9}
+          onPress={() => navigation.navigate("RecordReaction", { videoUri })}
+          style={styles.videoWrapper}
+        >
+          {videoStarted ? (
+            <VideoView
+              style={styles.video}
+              player={player}
+              allowsFullscreen={true}
+              allowsPictureInPicture={false}
+              showsTimecodes={true}
+            />
+          ) : (
+            <View style={styles.thumbnailContainer}>
+              {/* Thumbnail image */}
+              <Image 
+                source={{ uri: thumbnailUri }} 
+                style={styles.thumbnail}
+                resizeMode="cover"
+                onError={() => {
+                  console.log('Thumbnail failed to load, trying fallback');
+                  setThumbnailError(true);
+                }}
+                onLoad={() => {
+                  console.log('Thumbnail loaded successfully');
+                }}
+              />
+              
+              {/* Overlay with play button */}
+              <View style={styles.feebOverlay}>
+                <View style={styles.playButton}>
+                  <Ionicons name="videocam" size={36} color="white" />
+                </View>
+                <Text style={styles.feebText}>Tap to Feeb it</Text>
+              </View>
+            </View>
+          )}
+        </TouchableOpacity>
+
+        <Text style={styles.caption}>231 ❤️ · 76 🔁 · +41 reactions</Text>
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, padding: 16, backgroundColor: "#fff" },
+  header: { fontSize: 22, fontWeight: "700", marginBottom: 16 },
+  card: { marginBottom: 24 },
+  userRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginBottom: 8,
+  },
+  avatar: { width: 40, height: 40, borderRadius: 20 },
+  username: { fontWeight: "bold" },
+  follow: { color: "#00CFFF" },
+  location: { fontSize: 12, color: "#666" },
+  time: { marginLeft: "auto", fontSize: 12, color: "#aaa" },
+  videoWrapper: {
+    width: "100%",
+    aspectRatio: 16 / 9,
+    borderRadius: 12,
+    overflow: "hidden",
+    backgroundColor: "#f0f0f0", // Light gray background as fallback
+    position: "relative",
+  },
+  video: {
+    width: "100%",
+    height: "100%",
+  },
+  thumbnailContainer: {
+    width: "100%",
+    height: "100%",
+    position: "relative",
+  },
+  thumbnail: {
+    width: "100%",
+    height: "100%",
+  },
+  feebOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(0, 0, 0, 0.3)", // Semi-transparent overlay
+  },
+  playButton: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: "rgba(0, 207, 255, 0.9)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 12,
+  },
+  feebText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "white",
+    textShadowColor: "rgba(0, 0, 0, 0.7)",
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 3,
+  },
+  caption: { marginTop: 8, fontSize: 14, color: "#444" },
+});
+
+// File: src/screens/FeedsScreen.tsx
+import React from 'react';
+import { View, Text, StyleSheet, Image, TouchableOpacity } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+
+export default function FeedsScreen() {
+  return (
+    <View style={styles.container}>
+      {/* Top camera feed */}
+      <View style={styles.cameraPreview}>
+        <Image
+          source={{ uri: 'https://placekitten.com/400/300' }}
+          style={styles.cameraImage}
+          resizeMode="cover"
+        />
+        <TouchableOpacity style={styles.muteBtn}>
+          <Ionicons name="volume-mute" size={20} color="#fff" />
+        </TouchableOpacity>
+      </View>
+
+      {/* Bottom video feed */}
+      <View style={styles.videoSection}>
+        <Image
+          source={{
+            uri: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde',
+          }}
+          style={styles.videoImage}
+          resizeMode="cover"
+        />
+        <TouchableOpacity style={[styles.muteBtn, { top: 10 }]}>
+          <Ionicons name="volume-mute" size={20} color="#fff" />
+        </TouchableOpacity>
+
+        <View style={styles.sideActions}>
+          <TouchableOpacity style={styles.iconWrap}>
+            <Ionicons name="share-social" size={28} color="#333" />
+            <Text style={styles.iconLabel}>824</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.iconWrap}>
+            <Ionicons name="chatbubble-ellipses" size={28} color="#333" />
+            <Text style={styles.iconLabel}>200</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.iconWrap}>
+            <Ionicons name="heart" size={28} color="#E91E63" />
+            <Text style={styles.iconLabel}>1.2k</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.userInfo}>
+          <Text style={styles.userText}>
+            <Text style={{ fontWeight: 'bold' }}>Lilian Espech</Text> •{' '}
+            <Text style={{ color: '#00CFFF' }}>Follow</Text>
+          </Text>
+          <Text style={styles.location}>Los Angeles, USA</Text>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#fff',
+  },
+  cameraPreview: {
+    height: 160,
+    margin: 16,
+    borderRadius: 16,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  cameraImage: {
+    width: '100%',
+    height: '100%',
+  },
+  muteBtn: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    backgroundColor: '#0008',
+    padding: 6,
+    borderRadius: 20,
+  },
+  videoSection: {
+    flex: 1,
+    position: 'relative',
+  },
+  videoImage: {
+    width: '100%',
+    height: '100%',
+  },
+  sideActions: {
+    position: 'absolute',
+    right: 10,
+    bottom: 80,
+    alignItems: 'center',
+  },
+  iconWrap: {
+    marginBottom: 20,
+    alignItems: 'center',
+  },
+  iconLabel: {
+    fontSize: 12,
+    color: '#333',
+    marginTop: 2,
+  },
+  userInfo: {
+    position: 'absolute',
+    bottom: 20,
+    left: 16,
+  },
+  userText: {
+    color: '#000',
+    fontSize: 16,
+    marginBottom: 2,
+  },
+  location: {
+    fontSize: 12,
+    color: '#666',
+  },
+});
+
+// File: src/screens/RecordReactionScreen.tsx
+// screens/RecordReactionScreen.tsx
+import React, { useEffect, useRef, useState, useCallback } from "react";
+import {
+  View,
+  StyleSheet,
+  TouchableOpacity,
+  ActivityIndicator,
+  Text,
+  Dimensions,
+  Platform,
+  Alert,
+} from "react-native";
+import { VideoView, useVideoPlayer } from "expo-video";
+import {
+  CameraView,
+  useCameraPermissions,
+  useMicrophonePermissions,
+  PermissionStatus,
+} from "expo-camera";
+import type { CameraRecordingOptions } from "expo-camera";
+import { Ionicons } from "@expo/vector-icons";
+import { useNavigation, useRoute } from "@react-navigation/native";
+import WebCamera from "../components/WebCamera";
+import * as FileSystem from "expo-file-system";
+import { FeebStorage } from "../utils/FeebStorage";
+import { useHeadphoneDetection } from "../hooks/useHeadphoneDetection";
+import HeadphoneStatus, {
+  HeadphoneIndicator,
+} from "../components/HeadphoneStatus";
+
+const { width: screenWidth } = Dimensions.get("screen");
+
+// Enhanced debug logger
+class DebugLogger {
+  static log(category: string, message: string, data?: any) {
+    const timestamp = new Date().toISOString().substr(11, 12);
+    console.log(
+      `[${timestamp}] 🔍 [${category}] ${message}`,
+      data ? JSON.stringify(data, null, 2) : ""
+    );
+  }
+  static error(category: string, message: string, error?: any) {
+    const timestamp = new Date().toISOString().substr(11, 12);
+    console.error(`[${timestamp}] ❌ [${category}] ${message}`, error);
   }
 }
 
-// File: screens/ProfileScreen.tsx
+export default function RecordReactionScreen() {
+  const navigation = useNavigation<any>();
+  const route = useRoute<any>();
+  const cameraRef = useRef<CameraView>(null);
+
+  // Permissions
+  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
+  const [micPermission, requestMicPermission] = useMicrophonePermissions();
+
+  // Component state
+  const [videoReady, setVideoReady] = useState(false);
+  const [cameraReady, setCameraReady] = useState(false);
+  const [countdown, setCountdown] = useState<number | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [hasStartedFlow, setHasStartedFlow] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [audioEnabled, setAudioEnabled] = useState(false);
+
+  // Recording refs
+  const isActivelyRecordingRef = useRef(false);
+  const stopTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const webRecordingBlobRef = useRef<Blob | null>(null);
+  const recordingRef = useRef<Promise<any> | null>(null);
+  const recordingStartTimeRef = useRef<number | null>(null);
+
+  const { hasHeadphones } = useHeadphoneDetection();
+
+  // Video to react to
+  const videoUri =
+    route.params?.videoUri ||
+    "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4";
+
+  // Expo Video player - original video should play WITH AUDIO during recording
+  const player = useVideoPlayer(videoUri, (player) => {
+    player.loop = false;
+    player.muted = false; // UNMUTE during recording so user can hear and react to it
+  });
+
+  // Check permissions and request if needed
+  useEffect(() => {
+    const checkPermissions = async () => {
+      if (Platform.OS !== "web") {
+        DebugLogger.log("PERMISSIONS", "Checking native permissions");
+
+        if (cameraPermission?.status !== PermissionStatus.GRANTED) {
+          DebugLogger.log("PERMISSIONS", "Requesting camera");
+          const result = await requestCameraPermission();
+          DebugLogger.log("PERMISSIONS", "Camera permission result", {
+            granted: result.granted,
+          });
+        }
+
+        if (micPermission?.status !== PermissionStatus.GRANTED) {
+          DebugLogger.log("PERMISSIONS", "Requesting microphone");
+          const result = await requestMicPermission();
+          DebugLogger.log("PERMISSIONS", "Microphone permission result", {
+            granted: result.granted,
+          });
+          setAudioEnabled(result.granted);
+        } else {
+          setAudioEnabled(micPermission.granted);
+        }
+      } else {
+        DebugLogger.log(
+          "PERMISSIONS",
+          "Web platform - permissions handled by WebCamera"
+        );
+        setAudioEnabled(true); // Will be validated by WebCamera
+      }
+    };
+
+    checkPermissions();
+  }, [
+    cameraPermission,
+    micPermission,
+    requestCameraPermission,
+    requestMicPermission,
+  ]);
+
+  // Video ready listener
+  useEffect(() => {
+    const sub = player.addListener("statusChange", (status) => {
+      if (status.status === "readyToPlay" && !videoReady) {
+        setVideoReady(true);
+        DebugLogger.log("VIDEO", "readyToPlay", {
+          duration: player.duration,
+          currentTime: player.currentTime,
+          muted: player.muted,
+        });
+      }
+    });
+    return () => sub?.remove();
+  }, [player, videoReady]);
+
+  // Start countdown when everything is ready
+  useEffect(() => {
+    const nativeReady =
+      Platform.OS === "web" ||
+      (cameraPermission?.granted && micPermission?.granted);
+    const allReady = videoReady && cameraReady && nativeReady;
+
+    DebugLogger.log("READINESS", "Checking readiness", {
+      videoReady,
+      cameraReady,
+      nativeReady,
+      allReady,
+      hasStartedFlow,
+      isRecording,
+      isSaving,
+      audioEnabled,
+    });
+
+    if (allReady && !hasStartedFlow && !isRecording && !isSaving) {
+      DebugLogger.log("FLOW", "Starting countdown");
+      setHasStartedFlow(true);
+      setCountdown(3); // Give user time to prepare
+    }
+  }, [
+    videoReady,
+    cameraReady,
+    cameraPermission,
+    micPermission,
+    hasStartedFlow,
+    isRecording,
+    isSaving,
+    audioEnabled,
+  ]);
+
+  // Countdown timer
+  useEffect(() => {
+    if (countdown !== null) {
+      if (countdown > 0) {
+        const timer = setTimeout(() => setCountdown(countdown - 1), 1000);
+        return () => clearTimeout(timer);
+      } else {
+        setCountdown(null);
+        startRecording();
+      }
+    }
+  }, [countdown]);
+
+  // Validate recorded file (mobile only)
+  const validateRecordingFile = async (uri: string): Promise<boolean> => {
+    try {
+      const info = await FileSystem.getInfoAsync(uri);
+      if (!info.exists) {
+        DebugLogger.error("VALIDATION", "File doesn't exist", {
+          uri,
+          exists: info.exists,
+        });
+        return false;
+      }
+
+      // Check file size if it exists
+      if ("size" in info && info.size === 0) {
+        DebugLogger.error("VALIDATION", "File is empty", {
+          uri,
+          size: info.size,
+        });
+        return false;
+      }
+
+      const ext = uri.split(".").pop()?.toLowerCase() || "";
+      const validExtensions = ["mp4", "mov", "m4v", "avi"];
+      const isValidExt = validExtensions.includes(ext);
+
+      DebugLogger.log("VALIDATION", "File validation", {
+        uri,
+        exists: info.exists,
+        extension: ext,
+        isValid: isValidExt,
+      });
+
+      return isValidExt;
+    } catch (error) {
+      DebugLogger.error("VALIDATION", "Validation error", error);
+      return false;
+    }
+  };
+
+  // Start recording
+  const startRecording = useCallback(async () => {
+    DebugLogger.log("RECORDING", "startRecording called");
+    if (isActivelyRecordingRef.current) {
+      DebugLogger.log("RECORDING", "Already recording, ignoring");
+      return;
+    }
+
+    try {
+      isActivelyRecordingRef.current = true;
+      setIsRecording(true);
+      recordingStartTimeRef.current = Date.now();
+
+      // Start video playback (WITH AUDIO so user can hear and react to it)
+      player.currentTime = 0;
+      player.muted = false; // Enable audio so user can hear the original video
+      player.play();
+
+      DebugLogger.log("RECORDING", "Video playback started", {
+        muted: player.muted,
+        currentTime: player.currentTime,
+      });
+
+      if (Platform.OS === "web") {
+        DebugLogger.log("RECORDING", "Web recording - WebCamera will handle");
+        // WebCamera component handles the actual recording
+      } else {
+        if (!cameraRef.current) {
+          throw new Error("Camera not ready");
+        }
+
+        // Configure recording options with audio
+        const recordingOptions: CameraRecordingOptions = {
+          maxDuration: 60,
+          // Note: expo-camera automatically includes audio if microphone permission is granted
+        };
+
+        DebugLogger.log("RECORDING", "Starting native recording", {
+          options: recordingOptions,
+          micPermission: micPermission?.granted,
+          audioEnabled,
+        });
+
+        recordingRef.current = cameraRef.current.recordAsync(recordingOptions);
+      }
+
+      // Schedule automatic stop based on video duration
+      const videoDuration = player.duration || 15; // Default to 15 seconds
+      const recordingDuration = Math.ceil(videoDuration * 1000) + 2000; // Add 2s buffer
+
+      DebugLogger.log("RECORDING", "Scheduling stop", {
+        videoDuration,
+        recordingDuration: recordingDuration / 1000,
+      });
+
+      stopTimeoutRef.current = setTimeout(() => {
+        DebugLogger.log("RECORDING", "Auto-stopping recording");
+        stopRecording();
+      }, recordingDuration);
+    } catch (error: any) {
+      DebugLogger.error("RECORDING", "Failed to start recording", error);
+      isActivelyRecordingRef.current = false;
+      setIsRecording(false);
+      Alert.alert(
+        "Recording Error",
+        error.message || "Failed to start recording"
+      );
+    }
+  }, [player, micPermission, audioEnabled]);
+
+  // Stop recording
+  const stopRecording = useCallback(async () => {
+    DebugLogger.log("RECORDING", "stopRecording called");
+    if (!isActivelyRecordingRef.current) {
+      DebugLogger.log("RECORDING", "Not recording, ignoring stop");
+      return;
+    }
+
+    isActivelyRecordingRef.current = false;
+    setIsRecording(false);
+    setIsSaving(true);
+
+    // Clear timeout
+    if (stopTimeoutRef.current) {
+      clearTimeout(stopTimeoutRef.current);
+      stopTimeoutRef.current = null;
+    }
+
+    // Pause video
+    player.pause();
+
+    try {
+      if (Platform.OS === "web") {
+        DebugLogger.log("RECORDING", "Processing web recording");
+        // Wait a moment for the blob to be ready
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+
+        if (webRecordingBlobRef.current) {
+          DebugLogger.log("RECORDING", "Web blob ready", {
+            size: webRecordingBlobRef.current.size,
+            type: webRecordingBlobRef.current.type,
+          });
+          await saveWebRecording(webRecordingBlobRef.current);
+        } else {
+          throw new Error("No web recording blob available");
+        }
+      } else {
+        DebugLogger.log("RECORDING", "Processing native recording");
+        if (cameraRef.current) {
+          cameraRef.current.stopRecording();
+        }
+
+        if (recordingRef.current) {
+          const recording = await recordingRef.current;
+          DebugLogger.log("RECORDING", "Native recording completed", {
+            uri: recording?.uri,
+            duration: recording?.duration,
+          });
+
+          if (recording?.uri && (await validateRecordingFile(recording.uri))) {
+            await saveMobileRecording(recording);
+          } else {
+            throw new Error("Invalid or empty recording file");
+          }
+        } else {
+          throw new Error("No recording reference available");
+        }
+      }
+    } catch (error: any) {
+      DebugLogger.error("RECORDING", "Failed to save recording", error);
+      Alert.alert(
+        "Save Error",
+        error.message || "Failed to save your reaction"
+      );
+    } finally {
+      setIsSaving(false);
+      webRecordingBlobRef.current = null;
+      recordingRef.current = null;
+      recordingStartTimeRef.current = null;
+
+      // Navigate back after a short delay
+      setTimeout(() => {
+        navigation.goBack();
+      }, 1000);
+    }
+  }, [navigation, player]);
+
+  // Save mobile recording
+  const saveMobileRecording = useCallback(
+    async (recording: any) => {
+      DebugLogger.log("SAVE", "Saving mobile recording", {
+        uri: recording.uri,
+      });
+
+      const permanentUri = await FeebStorage.saveVideoToPermanentLocation(
+        recording.uri
+      );
+      const newFeeb = FeebStorage.createFeeb(permanentUri, videoUri);
+      await FeebStorage.saveFeeb(newFeeb);
+
+      DebugLogger.log("SAVE", "Mobile recording saved successfully");
+      Alert.alert("Success!", "Your reaction has been saved!");
+    },
+    [videoUri]
+  );
+
+  // Save web recording
+  const saveWebRecording = useCallback(
+    async (blob: Blob) => {
+      DebugLogger.log("SAVE", "Saving web recording", {
+        size: blob.size,
+        type: blob.type,
+      });
+
+      const videoId = await FeebStorage.saveWebVideoBlob(blob);
+      const newFeeb = FeebStorage.createFeeb(videoId, videoUri);
+      await FeebStorage.saveFeeb(newFeeb);
+
+      DebugLogger.log("SAVE", "Web recording saved successfully");
+      Alert.alert("Success!", "Your reaction has been saved!");
+    },
+    [videoUri]
+  );
+
+  // Handle web recording completion
+  const handleWebRecordingComplete = useCallback((videoBlob: Blob) => {
+    DebugLogger.log("WEB_RECORDING", "Recording complete", {
+      size: videoBlob.size,
+      type: videoBlob.type,
+    });
+    webRecordingBlobRef.current = videoBlob;
+  }, []);
+
+  // Handle camera ready
+  const handleCameraReady = useCallback(() => {
+    DebugLogger.log("CAMERA", "Camera ready");
+    setCameraReady(true);
+  }, []);
+
+  // Manual stop recording
+  const handleManualStop = useCallback(() => {
+    DebugLogger.log("USER_ACTION", "Manual stop requested");
+    stopRecording();
+  }, [stopRecording]);
+
+  // Check if everything is ready
+  const nativeReady =
+    Platform.OS === "web" ||
+    (cameraPermission?.granted && micPermission?.granted);
+  const allReady = videoReady && cameraReady && nativeReady;
+
+  return (
+    <View style={styles.container}>
+      <HeadphoneStatus
+        showWarning={!hasHeadphones}
+        onStatusChange={(connected) => {
+          console.log(
+            "🎧 Headphones:",
+            connected ? "connected" : "disconnected"
+          );
+        }}
+      />
+
+      <HeadphoneIndicator />
+      {/* Back button */}
+      <TouchableOpacity
+        style={styles.backButton}
+        onPress={() => navigation.goBack()}
+        disabled={isRecording || isSaving}
+      >
+        <View
+          style={[
+            styles.backButtonCircle,
+            (isRecording || isSaving) && styles.disabledButton,
+          ]}
+        >
+          <Ionicons name="arrow-back" size={24} color="#fff" />
+        </View>
+      </TouchableOpacity>
+
+      {/* Recording indicator */}
+      {isRecording && (
+        <View style={styles.recordingIndicator}>
+          <View style={styles.redDot} />
+          <Text style={styles.recordingText}>REC</Text>
+          {audioEnabled && (
+            <Ionicons
+              name="mic"
+              size={16}
+              color="#fff"
+              style={{ marginLeft: 4 }}
+            />
+          )}
+          <TouchableOpacity
+            style={styles.manualStopButton}
+            onPress={handleManualStop}
+          >
+            <Ionicons name="stop" size={20} color="#fff" />
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Audio status indicator */}
+      {allReady && !isRecording && !isSaving && (
+        <View style={styles.audioStatus}>
+          <Ionicons
+            name={audioEnabled ? "mic" : "mic-off"}
+            size={16}
+            color={audioEnabled ? "#00CFFF" : "#ff6b6b"}
+          />
+          <Text
+            style={[
+              styles.audioStatusText,
+              { color: audioEnabled ? "#00CFFF" : "#ff6b6b" },
+            ]}
+          >
+            {audioEnabled ? "Audio enabled" : "Audio disabled"}
+          </Text>
+        </View>
+      )}
+
+      {/* Original video (top half) */}
+      <View style={styles.half}>
+        <VideoView
+          style={styles.video}
+          player={player}
+          allowsFullscreen={false}
+          allowsPictureInPicture={false}
+          showsTimecodes={false}
+        />
+        <View style={styles.videoLabel}>
+          <Text style={styles.labelText}>Original Video</Text>
+          <Text style={styles.labelSubtext}>(Playing with audio)</Text>
+        </View>
+      </View>
+
+      {/* Camera view (bottom half) */}
+      <View style={styles.half}>
+        {Platform.OS === "web" ? (
+          <WebCamera
+            isRecording={isRecording}
+            onCameraReady={handleCameraReady}
+            onRecordingComplete={handleWebRecordingComplete}
+          />
+        ) : (
+          <CameraView
+            ref={cameraRef}
+            style={StyleSheet.absoluteFillObject}
+            facing="front"
+            mode="video"
+            videoQuality="720p"
+            onCameraReady={handleCameraReady}
+          />
+        )}
+        <View style={styles.videoLabel}>
+          <Text style={styles.labelText}>Your Reaction</Text>
+          <Text style={styles.labelSubtext}>
+            {audioEnabled ? "(With audio)" : "(Video only)"}
+          </Text>
+        </View>
+      </View>
+
+      {/* Loading overlay */}
+      {!allReady && (
+        <View style={styles.overlay}>
+          <ActivityIndicator size="large" color="#00CFFF" />
+          <Text style={styles.loadingText}>
+            {!videoReady && "Loading video..."}
+            {videoReady && !cameraReady && "Preparing camera..."}
+            {videoReady &&
+              cameraReady &&
+              !nativeReady &&
+              "Requesting permissions..."}
+          </Text>
+          {Platform.OS !== "web" && !micPermission?.granted && (
+            <Text style={styles.permissionText}>
+              Audio recording requires microphone permission
+            </Text>
+          )}
+        </View>
+      )}
+
+      {/* Countdown overlay */}
+      {countdown !== null && (
+        <View style={styles.overlay}>
+          <Text style={styles.countdownText}>{countdown}</Text>
+          <Text style={styles.countdownSubtext}>Get ready!</Text>
+        </View>
+      )}
+
+      {/* Saving overlay */}
+      {isSaving && (
+        <View style={styles.overlay}>
+          <ActivityIndicator size="large" color="#00CFFF" />
+          <Text style={styles.loadingText}>Saving your reaction...</Text>
+        </View>
+      )}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: "#000",
+  },
+
+  half: {
+    flex: 1,
+    overflow: "hidden",
+    backgroundColor: "#000",
+    position: "relative",
+  },
+
+  video: {
+    flex: 1,
+    width: screenWidth,
+    backgroundColor: "#000",
+  },
+
+  videoLabel: {
+    position: "absolute",
+    top: 8,
+    left: 8,
+    backgroundColor: "rgba(0, 0, 0, 0.7)",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+  },
+  labelText: {
+    color: "white",
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  labelSubtext: {
+    color: "#ccc",
+    fontSize: 10,
+  },
+
+  backButton: {
+    position: "absolute",
+    top: 50,
+    left: 20,
+    zIndex: 1000,
+  },
+  backButtonCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  disabledButton: {
+    opacity: 0.5,
+  },
+
+  recordingIndicator: {
+    position: "absolute",
+    top: 50,
+    right: 20,
+    zIndex: 1000,
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(0, 0, 0, 0.7)",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  redDot: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: "#ff0000",
+    marginRight: 8,
+  },
+  recordingText: {
+    color: "#ff0000",
+    fontSize: 14,
+    fontWeight: "bold",
+  },
+  manualStopButton: {
+    backgroundColor: "rgba(255, 0, 0, 0.8)",
+    padding: 6,
+    borderRadius: 15,
+    marginLeft: 8,
+  },
+
+  audioStatus: {
+    position: "absolute",
+    top: 100,
+    right: 20,
+    zIndex: 1000,
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(0, 0, 0, 0.7)",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  audioStatusText: {
+    fontSize: 12,
+    marginLeft: 4,
+    fontWeight: "600",
+  },
+
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0, 0, 0, 0.7)",
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 999,
+  },
+  loadingText: {
+    color: "#fff",
+    marginTop: 16,
+    fontSize: 16,
+    textAlign: "center",
+  },
+  permissionText: {
+    color: "#ff6b6b",
+    marginTop: 8,
+    fontSize: 14,
+    textAlign: "center",
+    paddingHorizontal: 32,
+  },
+  countdownText: {
+    fontSize: 120,
+    color: "#fff",
+    fontWeight: "bold",
+    textAlign: "center",
+  },
+  countdownSubtext: {
+    color: "#fff",
+    fontSize: 18,
+    marginTop: 16,
+    textAlign: "center",
+  },
+});
+
+
+// File: src/screens/UploadContentScreen.tsx
+// screens/UploadContentScreen.tsx
+import React from 'react';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+
+export default function UploadContentScreen() {
+  const handleUpload = () => {
+    alert('Here you would pick a video from device or record new content.');
+  };
+
+  return (
+    <View style={styles.container}>
+      <Ionicons name="cloud-upload" size={64} color="#00CFFF" />
+      <Text style={styles.title}>Upload a Video</Text>
+      <Text style={styles.description}>
+        Choose a video from your phone or record one to share with others.
+      </Text>
+      <TouchableOpacity style={styles.button} onPress={handleUpload}>
+        <Text style={styles.buttonText}>Select Video</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 32,
+  },
+  title: {
+    fontSize: 24,
+    marginTop: 20,
+    fontWeight: 'bold',
+  },
+  description: {
+    marginTop: 12,
+    textAlign: 'center',
+    color: '#666',
+  },
+  button: {
+    marginTop: 24,
+    backgroundColor: '#00CFFF',
+    paddingVertical: 14,
+    paddingHorizontal: 32,
+    borderRadius: 8,
+  },
+  buttonText: {
+    color: 'white',
+    fontWeight: '600',
+    fontSize: 16,
+  },
+});
+
+
+// File: src/screens/CreateFeebScreen.tsx
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import FeebCamera from '../components/FeebCamera';
+
+export default function CreateFeebScreen({ navigation }: any) {
+  const [showCamera, setShowCamera] = useState(false);
+
+  if (showCamera) return <FeebCamera />;
+
+  return (
+    <View style={styles.container}>
+      <Text style={styles.title}>Record your Feeb</Text>
+      <TouchableOpacity style={styles.recordButton} onPress={() => setShowCamera(true)}>
+        <Ionicons name="videocam" size={36} color="white" />
+      </TouchableOpacity>
+      <Text style={styles.hint}>Tap to start recording your reaction</Text>
+      <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+        <Ionicons name="arrow-back" size={24} color="#00CFFF" />
+        <Text style={styles.backText}>Back</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#000',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  title: {
+    fontSize: 24,
+    color: '#fff',
+    marginBottom: 20,
+  },
+  recordButton: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#00CFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  hint: {
+    color: '#aaa',
+    marginBottom: 40,
+  },
+  backBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    position: 'absolute',
+    top: 50,
+    left: 20,
+  },
+  backText: {
+    color: '#00CFFF',
+    marginLeft: 6,
+    fontWeight: '600',
+  },
+});
+
+
+// File: src/screens/ProfileScreen.tsx
 import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
@@ -430,8 +2590,8 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
-import { FeebStorage, Feeb } from "../utils/FeebStorage";
 import SideBySidePlayer from "../components/SideBySidePlayer";
+import { Feeb, FeebStorage } from "../utils/FeebStorage";
 
 const screenWidth = Dimensions.get("window").width;
 const SPACING = 8;
@@ -628,2056 +2788,4 @@ export default function ProfileScreen() {
             }
           } catch (error: any) {
             console.log(
-              "🔍 Error getting display URI:",
-              error?.message || error
-            );
-          }
-        }
-        console.log("🔍 -------------------------");
-      }
-      Alert.alert(
-        "Debug Info",
-        `Found ${
-          (await FeebStorage.getAllFeebs()).length
-        } feebs. Check console.`
-      );
-    } catch (error: any) {
-      console.error("🔍 Error in debug:", error);
-      Alert.alert("Debug Error", error?.message || "Unknown error");
-    }
-    console.log("🔍 ======= FEEB DEBUG END =======");
-  };
-
-  useFocusEffect(
-    useCallback(() => {
-      loadUserFeebs();
-    }, [])
-  );
-
-  const loadUserFeebs = async () => {
-    try {
-      setLoading(true);
-      const feebs = await FeebStorage.getAllFeebs();
-      setUserFeebs(feebs);
-      await loadFeebDisplayUris(feebs);
-    } catch (error: any) {
-      console.error("Error loading feebs:", error);
-      Alert.alert("Error", error?.message || "Failed to load your feebs");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadFeebDisplayUris = async (feebs: Feeb[]) => {
-    try {
-      const displayStates = await Promise.all(
-        feebs.map(async (feeb) => {
-          const state: FeebItemState = {
-            id: feeb.id,
-            displayUri: feeb.uri,
-            loading: false,
-            error: false,
-          };
-          if (Platform.OS === "web" && feeb.isWebBlob) {
-            state.loading = true;
-            const displayUri = await FeebStorage.getFeebDisplayUri(feeb);
-            state.loading = false;
-            if (displayUri) {
-              state.displayUri = displayUri;
-            } else {
-              state.error = true;
-              state.displayUri = "";
-            }
-          }
-          return state;
-        })
-      );
-      setFeebDisplayStates(displayStates);
-    } catch (error: any) {
-      console.error("Error loading display URIs:", error);
-      Alert.alert("Error", error?.message || "Failed to load videos");
-    }
-  };
-
-  const getFeebDisplayState = (feebId: string) =>
-    feebDisplayStates.find((s) => s.id === feebId);
-
-  const handlePlayFeeb = async (feeb: Feeb) => {
-    try {
-      let playableUri = feeb.uri;
-      if (Platform.OS === "web" && feeb.isWebBlob) {
-        const st = getFeebDisplayState(feeb.id);
-        playableUri =
-          st?.displayUri || (await FeebStorage.getFeebDisplayUri(feeb));
-      }
-      if (!playableUri) {
-        Alert.alert("Error", "Video could not be loaded");
-        return;
-      }
-      setFullscreenFeeb({ ...feeb, displayUri: playableUri });
-    } catch (error: any) {
-      console.error("Error playing feeb:", error);
-      Alert.alert("Error", error?.message || "Failed to play video");
-    }
-  };
-
-  const handleDeleteFeeb = (feebId: string) =>
-    Alert.alert("Delete Feeb", "Are you sure?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Delete",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            await FeebStorage.deleteFeeb(feebId);
-            await loadUserFeebs();
-            Alert.alert("Success", "Feeb deleted");
-          } catch (error: any) {
-            console.error("Error deleting feeb:", error);
-            Alert.alert("Error", error?.message || "Failed to delete feeb");
-          }
-        },
-      },
-    ]);
-
-  const handleCleanupInvalidFeebs = () =>
-    Alert.alert(
-      "Clean Up Invalid Videos",
-      "This will remove feebs that cannot be displayed. Continue?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Clean Up",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              const invalid = feebDisplayStates
-                .filter((s) => s.error)
-                .map((s) => s.id);
-              for (const id of invalid) {
-                await FeebStorage.deleteFeeb(id);
-              }
-              await loadUserFeebs();
-              Alert.alert("Success", `Removed ${invalid.length} items`);
-            } catch (error: any) {
-              console.error("Error cleaning up:", error);
-              Alert.alert("Error", error?.message || "Failed to clean up");
-            }
-          },
-        },
-      ]
-    );
-
-  const renderFeebItem = ({ item }: { item: Feeb }) => (
-    <FeebVideoGridItem
-      feeb={item}
-      displayState={getFeebDisplayState(item.id)}
-      onPress={() => handlePlayFeeb(item)}
-      onLongPress={() => handleDeleteFeeb(item.id)}
-    />
-  );
-
-  const renderContentItem = ({ item }: { item: ContentItem }) => (
-    <View style={styles.gridItem}>
-      <Image source={{ uri: item.uri }} style={styles.gridImage} />
-      <View style={styles.playIcon}>
-        <Ionicons name="play-circle" size={24} color="white" />
-      </View>
-    </View>
-  );
-
-  const renderHeader = () => (
-    <View style={styles.headerContainer}>
-      <Text style={styles.title}>My profile</Text>
-      <Image source={{ uri: user.avatarUri }} style={styles.avatar} />
-      <Text style={styles.name}>{user.name}</Text>
-      <Text style={styles.handle}>{user.handle}</Text>
-      <View style={styles.statsRow}>
-        {[
-          { label: "Followers", value: user.followers },
-          { label: "Following", value: user.following },
-          { label: "Feebs", value: String(userFeebs.length) },
-        ].map((s) => (
-          <View key={s.label} style={styles.stat}>
-            <Text style={styles.statValue}>{s.value}</Text>
-            <Text style={styles.statLabel}>{s.label}</Text>
-          </View>
-        ))}
-      </View>
-      <TouchableOpacity style={styles.editButton}>
-        <Text style={styles.editButtonText}>Edit profile</Text>
-        <Ionicons name="pencil" size={20} color="#00CFFF" />
-      </TouchableOpacity>
-      <TouchableOpacity style={styles.debugButton} onPress={debugFeebFiles}>
-        <Text style={styles.debugButtonText}>Debug Feebs</Text>
-        <Ionicons name="bug" size={20} color="#FF6B6B" />
-      </TouchableOpacity>
-      {Platform.OS === "web" && feebDisplayStates.some((s) => s.error) && (
-        <TouchableOpacity
-          style={styles.cleanupButton}
-          onPress={handleCleanupInvalidFeebs}
-        >
-          <Text style={styles.cleanupButtonText}>Clean up invalid videos</Text>
-          <Ionicons name="trash" size={16} color="#ff6b6b" />
-        </TouchableOpacity>
-      )}
-      <View style={styles.tabRow}>
-        {(["Feebs", "Contents"] as const).map((tab) => (
-          <TouchableOpacity
-            key={tab}
-            style={styles.tabButton}
-            onPress={() => setActiveTab(tab)}
-          >
-            <Text
-              style={[
-                styles.tabText,
-                activeTab === tab && styles.tabTextActive,
-              ]}
-            >
-              {tab}
-              {tab === "Feebs" && ` (${userFeebs.length})`}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-      <View style={styles.dividerRow}>
-        <View
-          style={[
-            styles.divider,
-            activeTab === "Feebs" && styles.dividerActive,
-          ]}
-        />
-        <View
-          style={[
-            styles.divider,
-            activeTab === "Contents" && styles.dividerActive,
-          ]}
-        />
-      </View>
-    </View>
-  );
-
-  const renderEmptyState = () => (
-    <View style={styles.emptyState}>
-      <Ionicons name="videocam-outline" size={64} color="#ccc" />
-      <Text style={styles.emptyTitle}>No feebs yet</Text>
-      <Text style={styles.emptySubtitle}>
-        Record your first reaction to get started!
-      </Text>
-    </View>
-  );
-
-  if (loading && activeTab === "Feebs") {
-    return (
-      <View style={styles.loadingContainer}>
-        <Text>Loading your feebs...</Text>
-      </View>
-    );
-  }
-
-  return (
-    <View style={styles.container}>
-      {activeTab === "Feebs" ? (
-        <FlatList
-          data={userFeebs}
-          keyExtractor={(item) => item.id}
-          numColumns={COLUMN_COUNT}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.listContent}
-          ListHeaderComponent={renderHeader}
-          ListEmptyComponent={renderEmptyState}
-          renderItem={renderFeebItem}
-        />
-      ) : (
-        <FlatList
-          data={sampleContents}
-          keyExtractor={(item) => item.id}
-          numColumns={COLUMN_COUNT}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.listContent}
-          ListHeaderComponent={renderHeader}
-          renderItem={renderContentItem}
-        />
-      )}
-      <FullscreenVideoModal
-        visible={!!fullscreenFeeb}
-        feeb={fullscreenFeeb}
-        onClose={() => setFullscreenFeeb(null)}
-      />
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
-  /* ... your existing styles unchanged ... */
-  container: { flex: 1, backgroundColor: "#fff" },
-  listContent: { padding: SPACING, backgroundColor: "#fff" },
-  headerContainer: { padding: SPACING, paddingBottom: SPACING * 2 },
-  title: { fontSize: 28, fontWeight: "700" },
-  avatar: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    alignSelf: "center",
-    marginTop: SPACING,
-  },
-  name: {
-    fontSize: 22,
-    fontWeight: "600",
-    textAlign: "center",
-    marginTop: SPACING / 2,
-  },
-  handle: {
-    fontSize: 14,
-    color: "#888",
-    textAlign: "center",
-    marginBottom: SPACING,
-  },
-  statsRow: {
-    flexDirection: "row",
-    justifyContent: "space-around",
-    marginBottom: SPACING,
-  },
-  stat: { alignItems: "center" },
-  statValue: { fontSize: 18, fontWeight: "600" },
-  statLabel: { fontSize: 12, color: "#aaa" },
-  editButton: {
-    flexDirection: "row",
-    alignSelf: "center",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#00CFFF",
-    borderRadius: 24,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    marginBottom: SPACING * 2,
-  },
-  editButtonText: {
-    color: "#00CFFF",
-    fontSize: 16,
-    fontWeight: "600",
-    marginRight: 8,
-  },
-  debugButton: {
-    flexDirection: "row",
-    alignSelf: "center",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#FF6B6B",
-    borderRadius: 24,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    marginBottom: SPACING * 2,
-    backgroundColor: "rgba(255, 107, 107, 0.1)",
-  },
-  debugButtonText: {
-    color: "#FF6B6B",
-    fontSize: 16,
-    fontWeight: "600",
-    marginRight: 8,
-  },
-  cleanupButton: {
-    flexDirection: "row",
-    alignSelf: "center",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#ff6b6b",
-    borderRadius: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    marginBottom: SPACING,
-  },
-  cleanupButtonText: {
-    color: "#ff6b6b",
-    fontSize: 12,
-    fontWeight: "600",
-    marginRight: 6,
-  },
-  tabRow: {
-    flexDirection: "row",
-    justifyContent: "space-around",
-    marginBottom: SPACING / 2,
-  },
-  tabButton: { flex: 1, alignItems: "center", paddingVertical: 8 },
-  tabText: { fontSize: 16, color: "#888" },
-  tabTextActive: { color: "#000", fontWeight: "700" },
-  dividerRow: { flexDirection: "row", height: 2, marginBottom: SPACING * 1.5 },
-  divider: { flex: 1, backgroundColor: "transparent" },
-  dividerActive: { backgroundColor: "#000" },
-  gridItem: {
-    width: ITEM_SIZE,
-    height: ITEM_SIZE,
-    margin: SPACING / 2,
-    borderRadius: 12,
-    overflow: "hidden",
-    backgroundColor: "#f0f0f0",
-    position: "relative",
-  },
-  gridImage: { width: "100%", height: "100%" },
-  videoContainer: { width: "100%", height: "100%", backgroundColor: "#000" },
-  gridVideoWeb: { width: "100%", height: "100%", objectFit: "cover" },
-  videoPlaceholder: {
-    width: "100%",
-    height: "100%",
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#1a1a1a",
-  },
-  videoPlaceholderText: { color: "#888", fontSize: 12, marginTop: 8 },
-  playButtonOverlay: {
-    position: "absolute",
-    top: "50%",
-    left: "50%",
-    transform: [{ translateX: -20 }, { translateY: -20 }],
-  },
-  playButtonCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "rgba(0, 207, 255, 0.9)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  videoInfoOverlay: { position: "absolute", bottom: 4, left: 4, right: 4 },
-  videoTypeIcon: {
-    position: "absolute",
-    top: 4,
-    left: 4,
-    backgroundColor: "rgba(0, 207, 255, 0.8)",
-    borderRadius: 8,
-    padding: 2,
-  },
-  videoDate: {
-    color: "white",
-    fontSize: 10,
-    textShadowColor: "rgba(0, 0, 0, 0.7)",
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 2,
-  },
-  videoPlatform: {
-    color: "white",
-    fontSize: 8,
-    opacity: 0.8,
-    textShadowColor: "rgba(0, 0, 0, 0.7)",
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 2,
-  },
-  playIcon: { position: "absolute", top: 8, right: 8 },
-  loadingItem: {
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#f0f0f0",
-  },
-  loadingText: { color: "#666", fontSize: 12 },
-  errorItem: {
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#ffebee",
-  },
-  errorText: {
-    color: "#d32f2f",
-    fontSize: 10,
-    marginTop: 4,
-    textAlign: "center",
-    fontWeight: "bold",
-  },
-  errorSubtext: {
-    color: "#d32f2f",
-    fontSize: 8,
-    marginTop: 2,
-    textAlign: "center",
-    opacity: 0.8,
-  },
-  emptyState: {
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 40,
-  },
-  emptyTitle: { fontSize: 18, fontWeight: "600", color: "#666", marginTop: 16 },
-  emptySubtitle: {
-    fontSize: 14,
-    color: "#aaa",
-    textAlign: "center",
-    marginTop: 8,
-    paddingHorizontal: 32,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#fff",
-  },
-});
-
-
-// File: screens/CreateFeebScreen.tsx
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import FeebCamera from '../components/FeebCamera';
-
-export default function CreateFeebScreen({ navigation }: any) {
-  const [showCamera, setShowCamera] = useState(false);
-
-  if (showCamera) return <FeebCamera />;
-
-  return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Record your Feeb</Text>
-      <TouchableOpacity style={styles.recordButton} onPress={() => setShowCamera(true)}>
-        <Ionicons name="videocam" size={36} color="white" />
-      </TouchableOpacity>
-      <Text style={styles.hint}>Tap to start recording your reaction</Text>
-      <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-        <Ionicons name="arrow-back" size={24} color="#00CFFF" />
-        <Text style={styles.backText}>Back</Text>
-      </TouchableOpacity>
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#000',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  title: {
-    fontSize: 24,
-    color: '#fff',
-    marginBottom: 20,
-  },
-  recordButton: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: '#00CFFF',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  hint: {
-    color: '#aaa',
-    marginBottom: 40,
-  },
-  backBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    position: 'absolute',
-    top: 50,
-    left: 20,
-  },
-  backText: {
-    color: '#00CFFF',
-    marginLeft: 6,
-    fontWeight: '600',
-  },
-});
-
-
-// File: navigation/RootNavigator.tsx
-import React from 'react';
-import { NavigationContainer } from '@react-navigation/native';
-import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { Ionicons } from '@expo/vector-icons';
-
-import FeedsScreen from '../screens/FeedsScreen';
-import ContentsScreen from '../screens/ContentsScreen';
-import ChatsScreen from '../screens/ChatsScreen';
-import ProfileScreen from '../screens/ProfileScreen';
-import CreateFeebScreen from '../screens/CreateFeebScreen';
-import UploadContentScreen from '../screens/UploadContentScreen';
-import RecordReactionScreen from '../screens/RecordReactionScreen';
-
-const Tab = createBottomTabNavigator();
-const Stack = createNativeStackNavigator();
-
-// Create a placeholder component instead of inline function
-function UploadPlaceholder() {
-  return null;
-}
-
-function MainTabs({ navigation }: any) {
-  return (
-    <Tab.Navigator
-      screenOptions={({ route }) => ({
-        tabBarIcon: ({ color, size }) => {
-          let iconName: any;
-          if (route.name === 'Feebs') iconName = 'shield';
-          else if (route.name === 'Contents') iconName = 'film';
-          else if (route.name === 'Chats') iconName = 'chatbubble';
-          else if (route.name === 'Profile') iconName = 'person';
-          else if (route.name === 'Upload') iconName = 'add-circle';
-          return <Ionicons name={iconName} size={size} color={color} />;
-        },
-        tabBarActiveTintColor: '#00CFFF',
-        tabBarInactiveTintColor: 'gray',
-        headerShown: false,
-      })}
-    >
-      <Tab.Screen name="Feebs" component={FeedsScreen} />
-      <Tab.Screen name="Contents" component={ContentsScreen} />
-      <Tab.Screen
-        name="Upload"
-        component={UploadPlaceholder}
-        options={{
-          tabBarIcon: ({ size }) => (
-            <Ionicons
-              name="add-circle"
-              size={size + 8}
-              color="#00CFFF"
-              style={{ marginTop: -10 }}
-            />
-          ),
-        }}
-        listeners={({ navigation }) => ({
-          tabPress: (e) => {
-            e.preventDefault();
-            navigation.navigate('UploadContent');
-          },
-        })}
-      />
-      <Tab.Screen name="Chats" component={ChatsScreen} />
-      <Tab.Screen name="Profile" component={ProfileScreen} />
-    </Tab.Navigator>
-  );
-}
-
-export default function RootNavigator() {
-  return (
-    <NavigationContainer>
-      <Stack.Navigator>
-        <Stack.Screen name="MainTabs" component={MainTabs} options={{ headerShown: false }} />
-        <Stack.Screen name="CreateFeeb" component={CreateFeebScreen} options={{ presentation: 'modal', title: 'Record Reaction' }} />
-        <Stack.Screen name="UploadContent" component={UploadContentScreen} options={{ title: 'Upload Video' }} />
-        <Stack.Screen name="RecordReaction" component={RecordReactionScreen} options={{ title: 'React to Video' }} />
-      </Stack.Navigator>
-    </NavigationContainer>
-  );
-}
-
-// File: components/FeebCamera.tsx
-import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
-import type { CameraRecordingOptions } from 'expo-camera';
-import { Ionicons } from '@expo/vector-icons';
-
-export default function FeebCamera() {
-  const [permission, requestPermission] = useCameraPermissions();
-  const [isRecording, setIsRecording] = useState(false);
-  const cameraRef = useRef<CameraView | null>(null);
-
-  const handleRecord = async () => {
-    if (!cameraRef.current) return;
-
-    if (isRecording) {
-      cameraRef.current.stopRecording();
-      setIsRecording(false);
-    } else {
-      setIsRecording(true);
-      try {
-        const recordingOptions: CameraRecordingOptions = {
-          // You can add options here if needed
-        };
-        const video = await cameraRef.current.recordAsync(recordingOptions);
-      } catch (error) {
-        console.error('Recording failed:', error);
-      } finally {
-        setIsRecording(false);
-      }
-    }
-  };
-
-  if (!permission) {
-    // Camera permissions are still loading
-    return <Text>Loading...</Text>;
-  }
-
-  if (!permission.granted) {
-    // Camera permissions are not granted yet
-    return (
-      <View style={styles.container}>
-        <Text style={styles.message}>We need your permission to show the camera</Text>
-        <TouchableOpacity onPress={requestPermission} style={styles.permissionButton}>
-          <Text style={styles.permissionButtonText}>Grant Permission</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
-
-  return (
-    <View style={{ flex: 1 }}>
-      <CameraView
-        ref={cameraRef}
-        style={{ flex: 1 }}
-        facing="front"
-        mode="video"
-      >
-        <TouchableOpacity style={styles.button} onPress={handleRecord}>
-          <Ionicons
-            name={isRecording ? 'square' : 'videocam'}
-            size={32}
-            color="white"
-          />
-        </TouchableOpacity>
-      </CameraView>
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  message: {
-    textAlign: 'center',
-    marginBottom: 20,
-    fontSize: 16,
-  },
-  permissionButton: {
-    backgroundColor: '#00CFFF',
-    padding: 12,
-    borderRadius: 8,
-  },
-  permissionButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  button: {
-    position: 'absolute',
-    bottom: 40,
-    alignSelf: 'center',
-    backgroundColor: '#00CFFF',
-    padding: 14,
-    borderRadius: 40,
-  },
-});
-
-// File: components/SideBySidePlayer.tsx
-import React, { useState, useEffect } from "react";
-import {
-  View,
-  StyleSheet,
-  TouchableOpacity,
-  Text,
-  Dimensions,
-  Modal,
-  Platform,
-} from "react-native";
-import { VideoView, useVideoPlayer } from "expo-video";
-import { Ionicons } from "@expo/vector-icons";
-
-const { width: screenWidth } = Dimensions.get("window");
-
-interface SideBySidePlayerProps {
-  visible: boolean;
-  originalVideoUri: string;
-  reactionVideoUri: string;
-  onClose: () => void;
-  feebId: string;
-  createdAt: string;
-  isWebBlob?: boolean;
-}
-
-export default function SideBySidePlayer({
-  visible,
-  originalVideoUri,
-  reactionVideoUri,
-  onClose,
-  feebId,
-  createdAt,
-  isWebBlob,
-}: SideBySidePlayerProps) {
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
-
-  // Create two players
-  const originalPlayer = useVideoPlayer(originalVideoUri, (player) => {
-    player.loop = false;
-    player.muted = false;
-  });
-  const reactionPlayer = useVideoPlayer(reactionVideoUri, (player) => {
-    player.loop = false;
-    player.muted = true;
-  });
-
-  // When both players are ready, capture duration
-  useEffect(() => {
-    const sub = originalPlayer.addListener("statusChange", (status) => {
-      if (status.status === "readyToPlay" && originalPlayer.duration > 0) {
-        setDuration(originalPlayer.duration);
-      }
-    });
-    return () => sub.remove();
-  }, [originalPlayer]);
-
-  // Sync play/pause
-  useEffect(() => {
-    if (!visible) return;
-    if (isPlaying) {
-      originalPlayer.play();
-      reactionPlayer.play();
-      if (isWebBlob && reactionVideoUri.startsWith("data:")) {
-        document
-          .querySelectorAll('video[src^="data:video"]')
-          .forEach((v: any) => {
-            if (v.src === reactionVideoUri) {
-              v.currentTime = originalPlayer.currentTime;
-              v.play();
-            }
-          });
-      }
-    } else {
-      originalPlayer.pause();
-      reactionPlayer.pause();
-      if (isWebBlob && reactionVideoUri.startsWith("data:")) {
-        document
-          .querySelectorAll('video[src^="data:video"]')
-          .forEach((v: any) => {
-            if (v.src === reactionVideoUri) v.pause();
-          });
-      }
-    }
-  }, [isPlaying, visible, originalPlayer, reactionPlayer]);
-
-  // Keep our slider in sync
-  useEffect(() => {
-    if (!visible) return;
-    const id = setInterval(() => {
-      if (originalPlayer.playing) {
-        const t = originalPlayer.currentTime;
-        setCurrentTime(t);
-        if (Math.abs(t - reactionPlayer.currentTime) > 0.2) {
-          reactionPlayer.currentTime = t;
-        }
-      }
-    }, 100);
-    return () => clearInterval(id);
-  }, [visible, originalPlayer, reactionPlayer]);
-
-  // Reset on open
-  useEffect(() => {
-    if (visible) {
-      originalPlayer.currentTime = 0;
-      reactionPlayer.currentTime = 0;
-      setCurrentTime(0);
-      setIsPlaying(false);
-    }
-  }, [visible]);
-
-  const formatTime = (s: number) => {
-    const m = Math.floor(s / 60);
-    const sec = Math.floor(s % 60)
-      .toString()
-      .padStart(2, "0");
-    return `${m}:${sec}`;
-  };
-  const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
-
-  if (!visible) return null;
-  return (
-    <Modal visible={visible} animationType="slide" onRequestClose={onClose} statusBarTranslucent>
-      <View style={styles.container}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-            <Ionicons name="arrow-back" size={24} color="white" />
-          </TouchableOpacity>
-          <Text style={styles.timestamp}>{new Date(createdAt).toLocaleString()}</Text>
-        </View>
-
-        {/* Two videos stacked vertically */}
-        <View style={styles.videoWrapper}>
-          <VideoView style={styles.video} player={originalPlayer} showsTimecodes={false} />
-        </View>
-        <View style={styles.videoWrapper}>
-          {isWebBlob && reactionVideoUri.startsWith("data:") ? (
-            <video
-              src={reactionVideoUri}
-              style={styles.video as any}
-              muted
-              onTimeUpdate={(e) => {
-                const v = e.currentTarget as HTMLVideoElement;
-                if (Math.abs(originalPlayer.currentTime - v.currentTime) > 0.2) {
-                  v.currentTime = originalPlayer.currentTime;
-                }
-              }}
-            />
-          ) : (
-            <VideoView style={styles.video} player={reactionPlayer} showsTimecodes={false} />
-          )}
-        </View>
-
-        {/* Controls */}
-        <View style={styles.controls}>
-          <View style={styles.progressRow}>
-            <Text style={styles.timeText}>{formatTime(currentTime)}</Text>
-            <TouchableOpacity
-              style={styles.progressBarContainer}
-              activeOpacity={1}
-              onPress={(e) => {
-                const x = e.nativeEvent.locationX;
-                const w = screenWidth - 80; // leave space for time labels
-                const pct = Math.min(1, Math.max(0, x / w));
-                const t = pct * duration;
-                originalPlayer.currentTime = t;
-                reactionPlayer.currentTime = t;
-                setCurrentTime(t);
-              }}
-            >
-              <View style={styles.progressBar}>
-                <View style={[styles.progressFill, { width: `${progress}%` }]} />
-              </View>
-            </TouchableOpacity>
-            <Text style={styles.timeText}>{formatTime(duration)}</Text>
-          </View>
-
-          <View style={styles.buttonsRow}>
-            <TouchableOpacity onPress={() => {
-              originalPlayer.currentTime = 0;
-              reactionPlayer.currentTime = 0;
-              setCurrentTime(0);
-            }}>
-              <Ionicons name="play-back" size={28} color="white" />
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => setIsPlaying((p) => !p)}>
-              <Ionicons name={isPlaying ? "pause" : "play"} size={36} color="white" />
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => {
-              originalPlayer.currentTime = duration;
-              reactionPlayer.currentTime = duration;
-              setCurrentTime(duration);
-            }}>
-              <Ionicons name="play-forward" size={28} color="white" />
-            </TouchableOpacity>
-          </View>
-        </View>
-      </View>
-    </Modal>
-  );
-}
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#000" },
-  header: { flexDirection: "row", alignItems: "center", padding: 12, backgroundColor: "#111" },
-  closeButton: { marginRight: 16 },
-  timestamp: { color: "#ccc" },
-
-  videoWrapper: { flex: 1, backgroundColor: "#000" },
-  video: { width: "100%", height: "100%" },
-
-  controls: { padding: 16, backgroundColor: "#111" },
-  progressRow: { flexDirection: "row", alignItems: "center", marginBottom: 12 },
-  timeText: { color: "#fff", width: 40, textAlign: "center" },
-  progressBarContainer: { flex: 1 },
-  progressBar: { height: 4, backgroundColor: "#333", borderRadius: 2 },
-  progressFill: { height: "100%", backgroundColor: "#00CFFF" },
-
-  buttonsRow: { flexDirection: "row", justifyContent: "space-around", alignItems: "center" },
-});
-
-
-// File: components/ProfileTabs.tsx
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import React, { useState } from 'react';
-
-export default function ProfileTabs() {
-  const [active, setActive] = useState<'feebs' | 'contents'>('feebs');
-
-  return (
-    <View style={styles.wrapper}>
-      <TouchableOpacity
-        style={[styles.tab, active === 'feebs' && styles.active]}
-        onPress={() => setActive('feebs')}
-      >
-        <Text style={styles.label}>Feebs</Text>
-      </TouchableOpacity>
-      <TouchableOpacity
-        style={[styles.tab, active === 'contents' && styles.active]}
-        onPress={() => setActive('contents')}
-      >
-        <Text style={styles.label}>Contents</Text>
-      </TouchableOpacity>
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
-  wrapper: {
-    flexDirection: 'row',
-    marginVertical: 16,
-  },
-  tab: {
-    flex: 1,
-    alignItems: 'center',
-    padding: 12,
-    borderBottomWidth: 2,
-    borderBottomColor: 'transparent',
-  },
-  active: {
-    borderBottomColor: '#00CFFF',
-  },
-  label: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
-});
-
-
-// File: components/WebCamera.tsx
-import React, { useRef, useEffect, useState, useCallback } from 'react';
-import { View, StyleSheet, Platform, Text } from 'react-native';
-
-interface WebCameraProps {
-  isRecording: boolean;
-  onCameraReady: () => void;
-  onRecordingComplete: (videoBlob: Blob) => void;
-}
-
-export default function WebCamera({ isRecording, onCameraReady, onRecordingComplete }: WebCameraProps) {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const recordingStateRef = useRef<'idle' | 'starting' | 'recording' | 'stopping'>('idle');
-  
-  const [hasPermission, setHasPermission] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [isInitializing, setIsInitializing] = useState(false);
-  const [debugInfo, setDebugInfo] = useState<string>('');
-
-  // Enhanced logging
-  const logState = useCallback((action: string, extra?: any) => {
-    console.log(`📷 [WebCamera-${action}]`, {
-      isRecording,
-      recordingState: recordingStateRef.current,
-      hasMediaRecorder: !!mediaRecorderRef.current,
-      mediaRecorderState: mediaRecorderRef.current?.state || 'none',
-      hasStream: !!streamRef.current,
-      ...extra
-    });
-  }, [isRecording]);
-
-  useEffect(() => {
-    if (Platform.OS === 'web') {
-      const timer = setTimeout(() => {
-        initializeCamera();
-      }, 100);
-      return () => clearTimeout(timer);
-    }
-    return () => {
-      cleanup();
-    };
-  }, []);
-
-  useEffect(() => {
-    if (Platform.OS === 'web' && hasPermission && streamRef.current && videoRef.current) {
-      console.log('🔗 Setting up video element with existing stream...');
-      videoRef.current.srcObject = streamRef.current;
-      videoRef.current.play().catch(console.log);
-    }
-  }, [hasPermission]);
-
-  // Enhanced recording state management
-  useEffect(() => {
-    if (Platform.OS === 'web' && hasPermission) {
-      logState('RECORDING_PROP_CHANGED');
-      
-      if (isRecording && recordingStateRef.current === 'idle') {
-        startRecording();
-      } else if (!isRecording && recordingStateRef.current === 'recording') {
-        stopRecording();
-      }
-    }
-  }, [isRecording, hasPermission, logState]);
-
-  const checkCameraAvailability = async () => {
-    try {
-      console.log('🔍 Checking camera availability...');
-      
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        throw new Error('Media devices API not supported in this browser');
-      }
-
-      const devices = await navigator.mediaDevices.enumerateDevices();
-      const videoDevices = devices.filter(device => device.kind === 'videoinput');
-      
-      console.log('📱 Available video devices:', videoDevices.length);
-      setDebugInfo(`Found ${videoDevices.length} camera(s)`);
-
-      if (videoDevices.length === 0) {
-        throw new Error('No camera devices found on this device');
-      }
-
-      return videoDevices;
-    } catch (error) {
-      console.error('❌ Camera availability check failed:', error);
-      throw error;
-    }
-  };
-
-  const initializeCamera = async () => {
-    if (isInitializing) {
-      console.log('⏳ Camera initialization already in progress...');
-      return;
-    }
-
-    try {
-      setIsInitializing(true);
-      setError(null);
-      console.log('🌐 Initializing web camera...');
-      
-      await checkCameraAvailability();
-
-      const constraintOptions = [
-        {
-          video: { 
-            facingMode: 'user',
-            width: { ideal: 1280 },
-            height: { ideal: 720 }
-          }, 
-          audio: true 
-        },
-        {
-          video: { 
-            facingMode: 'user',
-            width: { ideal: 640 },
-            height: { ideal: 480 }
-          }, 
-          audio: true 
-        },
-        {
-          video: true, 
-          audio: true 
-        },
-        {
-          video: true, 
-          audio: false 
-        }
-      ];
-
-      let stream: MediaStream | null = null;
-      let lastError: Error | null = null;
-
-      for (let i = 0; i < constraintOptions.length; i++) {
-        try {
-          console.log(`🎥 Attempting camera access with configuration ${i + 1}...`);
-          setDebugInfo(`Trying camera config ${i + 1}/${constraintOptions.length}`);
-          stream = await navigator.mediaDevices.getUserMedia(constraintOptions[i]);
-          console.log(`✅ Camera access successful with configuration ${i + 1}`);
-          setDebugInfo(`Camera access successful!`);
-          break;
-        } catch (err) {
-          lastError = err as Error;
-          console.log(`❌ Configuration ${i + 1} failed:`, err);
-          setDebugInfo(`Config ${i + 1} failed: ${lastError.message}`);
-          continue;
-        }
-      }
-
-      if (!stream) {
-        throw lastError || new Error('Failed to access camera with all configurations');
-      }
-
-      streamRef.current = stream;
-
-      if (videoRef.current) {
-        console.log('📺 Setting up video element...');
-        videoRef.current.srcObject = stream;
-        videoRef.current.play().catch(console.log);
-      }
-
-      console.log('🚀 Stream ready, triggering callback');
-      setHasPermission(true);
-      setDebugInfo('Camera ready!');
-      onCameraReady();
-    } catch (error) {
-      console.error('❌ Failed to initialize camera:', error);
-      setHasPermission(false);
-      
-      let errorMessage = 'Failed to access camera';
-      if (error instanceof Error) {
-        if (error.name === 'NotFoundError') {
-          errorMessage = 'No camera found. Please connect a camera and try again.';
-        } else if (error.name === 'NotAllowedError') {
-          errorMessage = 'Camera permission denied. Please allow camera access and refresh the page.';
-        } else if (error.name === 'NotReadableError') {
-          errorMessage = 'Camera is busy or unavailable. Please close other applications using the camera.';
-        } else if (error.message.includes('Media devices API not supported')) {
-          errorMessage = 'Camera not supported in this browser. Please use Chrome, Firefox, or Safari.';
-        } else if (error.message.includes('No camera devices found')) {
-          errorMessage = 'No camera detected. Please connect a camera or check your device settings.';
-        }
-      }
-      
-      setError(errorMessage);
-    } finally {
-      setIsInitializing(false);
-    }
-  };
-
-  const startRecording = useCallback(() => {
-    if (!streamRef.current) {
-      console.error('❌ No stream available for recording');
-      return;
-    }
-
-    if (recordingStateRef.current !== 'idle') {
-      console.log('⚠️ Recording not in idle state, current:', recordingStateRef.current);
-      return;
-    }
-
-    try {
-      recordingStateRef.current = 'starting';
-      console.log('🎥 Starting web recording...');
-      logState('START_RECORDING');
-      
-      const mimeTypes = [
-        'video/webm;codecs=vp9,opus',
-        'video/webm;codecs=vp8,opus', 
-        'video/webm;codecs=h264,opus',
-        'video/webm',
-        'video/mp4'
-      ];
-
-      let mediaRecorder: MediaRecorder | null = null;
-      for (const mimeType of mimeTypes) {
-        if (MediaRecorder.isTypeSupported(mimeType)) {
-          console.log(`📼 Using MIME type: ${mimeType}`);
-          mediaRecorder = new MediaRecorder(streamRef.current, { mimeType });
-          break;
-        }
-      }
-
-      if (!mediaRecorder) {
-        mediaRecorder = new MediaRecorder(streamRef.current);
-        console.log('📼 Using default MediaRecorder settings');
-      }
-
-      const chunks: BlobPart[] = [];
-
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          chunks.push(event.data);
-          console.log(`📊 Recording chunk: ${event.data.size} bytes (State: ${recordingStateRef.current})`);
-        }
-      };
-
-      mediaRecorder.onstop = () => {
-        console.log('🛑 Web recording stopped');
-        logState('RECORDING_STOPPED', { chunksCount: chunks.length });
-        
-        const videoBlob = new Blob(chunks, { type: mediaRecorder?.mimeType || 'video/webm' });
-        console.log(`📁 Created video blob: ${videoBlob.size} bytes`);
-        
-        recordingStateRef.current = 'idle';
-        onRecordingComplete(videoBlob);
-      };
-
-      mediaRecorder.onerror = (event) => {
-        console.error('❌ MediaRecorder error:', event);
-        recordingStateRef.current = 'idle';
-        logState('RECORDING_ERROR', { error: event });
-      };
-
-      mediaRecorder.onstart = () => {
-        console.log('✅ MediaRecorder started');
-        recordingStateRef.current = 'recording';
-        logState('RECORDING_STARTED');
-      };
-
-      mediaRecorder.start(1000); // Collect data every second
-      mediaRecorderRef.current = mediaRecorder;
-      console.log('🎬 MediaRecorder.start() called');
-
-    } catch (error) {
-      console.error('❌ Failed to start recording:', error);
-      recordingStateRef.current = 'idle';
-      logState('START_RECORDING_ERROR', { error });
-      setError('Failed to start recording. Please try again.');
-    }
-  }, [logState, onRecordingComplete]);
-
-  const stopRecording = useCallback(() => {
-    logState('STOP_RECORDING_CALLED');
-    
-    if (recordingStateRef.current !== 'recording') {
-      console.log('⚠️ Not in recording state, current:', recordingStateRef.current);
-      return;
-    }
-
-    if (!mediaRecorderRef.current) {
-      console.log('⚠️ No MediaRecorder available');
-      recordingStateRef.current = 'idle';
-      return;
-    }
-
-    if (mediaRecorderRef.current.state !== 'recording') {
-      console.log('⚠️ MediaRecorder not in recording state:', mediaRecorderRef.current.state);
-      recordingStateRef.current = 'idle';
-      return;
-    }
-
-    try {
-      recordingStateRef.current = 'stopping';
-      console.log('🛑 Stopping web recording...');
-      logState('STOPPING_RECORDING');
-      
-      mediaRecorderRef.current.stop();
-      mediaRecorderRef.current = null;
-    } catch (error) {
-      console.error('❌ Error stopping recording:', error);
-      recordingStateRef.current = 'idle';
-      logState('STOP_RECORDING_ERROR', { error });
-    }
-  }, [logState]);
-
-  const cleanup = () => {
-    console.log('🧹 Cleaning up camera resources...');
-    
-    // Stop recording if active
-    if (recordingStateRef.current === 'recording' && mediaRecorderRef.current) {
-      try {
-        mediaRecorderRef.current.stop();
-      } catch (e) {
-        console.log('Error stopping recorder during cleanup:', e);
-      }
-    }
-    
-    // Clean up stream
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => {
-        track.stop();
-        console.log(`🛑 Stopped track: ${track.kind}`);
-      });
-      streamRef.current = null;
-    }
-    
-    // Reset refs
-    mediaRecorderRef.current = null;
-    recordingStateRef.current = 'idle';
-  };
-
-  if (Platform.OS !== 'web') {
-    return null;
-  }
-
-  if (error) {
-    return (
-      <View style={styles.errorContainer}>
-        <Text style={styles.errorTitle}>Camera Error</Text>
-        <Text style={styles.errorMessage}>{error}</Text>
-        <Text style={styles.errorHint}>
-          Troubleshooting tips:{'\n'}
-          • Check camera permissions in browser settings{'\n'}
-          • Ensure no other apps are using the camera{'\n'}
-          • Try refreshing the page{'\n'}
-          • Use Chrome, Firefox, or Safari for best results
-        </Text>
-      </View>
-    );
-  }
-
-  if (isInitializing || !hasPermission) {
-    return (
-      <View style={styles.loadingContainer}>
-        <Text style={styles.loadingText}>
-          {isInitializing ? 'Initializing camera...' : 'Waiting for camera...'}
-        </Text>
-        {debugInfo ? (
-          <Text style={styles.debugText}>{debugInfo}</Text>
-        ) : null}
-        {isInitializing ? (
-          <Text 
-            style={styles.retryButton}
-            onPress={() => {
-              console.log('🔄 Manual retry triggered');
-              setIsInitializing(false);
-              setTimeout(() => initializeCamera(), 100);
-            }}
-          >
-            Tap to retry
-          </Text>
-        ) : null}
-      </View>
-    );
-  }
-
-  return (
-    <View style={styles.container}>
-      <video
-        ref={videoRef}
-        style={styles.video}
-        autoPlay
-        muted
-        playsInline
-      />
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    position: 'relative',
-  },
-  video: {
-    width: '100%',
-    height: '100%',
-    objectFit: 'cover',
-  } as any,
-
-  errorContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-    backgroundColor: '#f8f8f8',
-  },
-  errorTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#d32f2f',
-    marginBottom: 10,
-    textAlign: 'center',
-  },
-  errorMessage: {
-    fontSize: 16,
-    color: '#666',
-    textAlign: 'center',
-    marginBottom: 15,
-  },
-  errorHint: {
-    fontSize: 14,
-    color: '#888',
-    textAlign: 'left',
-    lineHeight: 20,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#f0f0f0',
-  },
-  loadingText: {
-    fontSize: 16,
-    color: '#666',
-    textAlign: 'center',
-  },
-  debugText: {
-    fontSize: 14,
-    color: '#888',
-    textAlign: 'center',
-    marginTop: 10,
-    fontStyle: 'italic',
-  },
-  retryButton: {
-    fontSize: 16,
-    color: '#00CFFF',
-    textAlign: 'center',
-    marginTop: 20,
-    textDecorationLine: 'underline',
-    cursor: 'pointer',
-  } as any,
-});
-
-// File: screens/ChatsScreen.tsx
-import { View, Text, FlatList, StyleSheet, Image } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-
-const chats = [
-  {
-    id: '1',
-    name: 'Floyd Miles',
-    message: 'You have to see that feeb pleaaaase open it 😂',
-    time: '1 min ago',
-    avatar: 'https://randomuser.me/api/portraits/men/1.jpg',
-  },
-  {
-    id: '2',
-    name: 'Kristin Watson',
-    message: '📽️ Sent you a feeb',
-    time: '8:24 p.m.',
-    avatar: 'https://randomuser.me/api/portraits/women/2.jpg',
-  },
-  {
-    id: '3',
-    name: 'Ralph Edwards',
-    message: 'Ok!',
-    time: '4:34 p.m.',
-    avatar: 'https://randomuser.me/api/portraits/men/3.jpg',
-  },
-];
-
-export default function ChatsScreen() {
-  return (
-    <View style={{ flex: 1, backgroundColor: '#fff' }}>
-      <Text style={styles.title}>Chats</Text>
-      <FlatList
-        data={chats}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <View style={styles.item}>
-            <Image source={{ uri: item.avatar }} style={styles.avatar} />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.name}>{item.name}</Text>
-              <Text style={styles.message}>{item.message}</Text>
-            </View>
-            <View style={styles.meta}>
-              <Text style={styles.time}>{item.time}</Text>
-              <Ionicons name="chevron-forward" size={18} color="#aaa" />
-            </View>
-          </View>
-        )}
-      />
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
-  title: {
-    fontSize: 28,
-    fontWeight: '700',
-    marginTop: 50,
-    marginBottom: 20,
-    marginLeft: 20,
-  },
-  item: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    borderBottomColor: '#eee',
-    borderBottomWidth: 1,
-  },
-  avatar: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    marginRight: 12,
-  },
-  name: {
-    fontWeight: '600',
-    fontSize: 16,
-  },
-  message: {
-    color: '#666',
-  },
-  time: {
-    fontSize: 12,
-    color: '#aaa',
-    marginBottom: 4,
-  },
-  meta: {
-    alignItems: 'flex-end',
-    justifyContent: 'center',
-  },
-});
-
-// File: screens/ContentsScreen.tsx
-import React, { useState } from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  Image,
-  Dimensions,
-} from "react-native";
-import { useNavigation } from "@react-navigation/native";
-import { Ionicons } from "@expo/vector-icons";
-import { VideoView, useVideoPlayer } from 'expo-video';
-
-const screenWidth = Dimensions.get("window").width;
-
-export default function ContentsScreen() {
-  const navigation = useNavigation<any>();
-
-  const [videoStarted, setVideoStarted] = useState(false);
-  const [thumbnailError, setThumbnailError] = useState(false);
-
-  const videoUri = "https://samplelib.com/lib/preview/mp4/sample-5s.mp4";
-
-  // Better thumbnail URLs that are more reliable
-  const thumbnailUri = thumbnailError 
-    ? 'https://picsum.photos/640/360' // Fallback to Lorem Picsum
-    : 'https://images.unsplash.com/photo-1611162617474-5b21e879e113?w=640&h=360&fit=crop'; // Unsplash video thumbnail
-
-  // Setup video player
-  const player = useVideoPlayer(videoUri, (player) => {
-    player.loop = false;
-    player.muted = false;
-  });
-
-  return (
-    <View style={styles.container}>
-      <Text style={styles.header}>Contents</Text>
-      <View style={styles.card}>
-        <View style={styles.userRow}>
-          <Image
-            source={{ uri: "https://picsum.photos/100/100?random=1" }}
-            style={styles.avatar}
-          />
-          <View>
-            <Text style={styles.username}>
-              Lilian Espech • <Text style={styles.follow}>Following</Text>
-            </Text>
-            <Text style={styles.location}>Los Angeles, USA</Text>
-          </View>
-          <Text style={styles.time}>1 min ago</Text>
-        </View>
-
-        {/* Thumbnail or video */}
-        <TouchableOpacity
-          activeOpacity={0.9}
-          onPress={() => navigation.navigate("RecordReaction", { videoUri })}
-          style={styles.videoWrapper}
-        >
-          {videoStarted ? (
-            <VideoView
-              style={styles.video}
-              player={player}
-              allowsFullscreen={true}
-              allowsPictureInPicture={false}
-              showsTimecodes={true}
-            />
-          ) : (
-            <View style={styles.thumbnailContainer}>
-              {/* Thumbnail image */}
-              <Image 
-                source={{ uri: thumbnailUri }} 
-                style={styles.thumbnail}
-                resizeMode="cover"
-                onError={() => {
-                  console.log('Thumbnail failed to load, trying fallback');
-                  setThumbnailError(true);
-                }}
-                onLoad={() => {
-                  console.log('Thumbnail loaded successfully');
-                }}
-              />
-              
-              {/* Overlay with play button */}
-              <View style={styles.feebOverlay}>
-                <View style={styles.playButton}>
-                  <Ionicons name="videocam" size={36} color="white" />
-                </View>
-                <Text style={styles.feebText}>Tap to Feeb it</Text>
-              </View>
-            </View>
-          )}
-        </TouchableOpacity>
-
-        <Text style={styles.caption}>231 ❤️ · 76 🔁 · +41 reactions</Text>
-      </View>
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
-  container: { flex: 1, padding: 16, backgroundColor: "#fff" },
-  header: { fontSize: 22, fontWeight: "700", marginBottom: 16 },
-  card: { marginBottom: 24 },
-  userRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    marginBottom: 8,
-  },
-  avatar: { width: 40, height: 40, borderRadius: 20 },
-  username: { fontWeight: "bold" },
-  follow: { color: "#00CFFF" },
-  location: { fontSize: 12, color: "#666" },
-  time: { marginLeft: "auto", fontSize: 12, color: "#aaa" },
-  videoWrapper: {
-    width: "100%",
-    aspectRatio: 16 / 9,
-    borderRadius: 12,
-    overflow: "hidden",
-    backgroundColor: "#f0f0f0", // Light gray background as fallback
-    position: "relative",
-  },
-  video: {
-    width: "100%",
-    height: "100%",
-  },
-  thumbnailContainer: {
-    width: "100%",
-    height: "100%",
-    position: "relative",
-  },
-  thumbnail: {
-    width: "100%",
-    height: "100%",
-  },
-  feebOverlay: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(0, 0, 0, 0.3)", // Semi-transparent overlay
-  },
-  playButton: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: "rgba(0, 207, 255, 0.9)",
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 12,
-  },
-  feebText: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "white",
-    textShadowColor: "rgba(0, 0, 0, 0.7)",
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 3,
-  },
-  caption: { marginTop: 8, fontSize: 14, color: "#444" },
-});
-
-// File: screens/FeedsScreen.tsx
-import React from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-
-export default function FeedsScreen() {
-  return (
-    <View style={styles.container}>
-      {/* Top camera feed */}
-      <View style={styles.cameraPreview}>
-        <Image
-          source={{ uri: 'https://placekitten.com/400/300' }}
-          style={styles.cameraImage}
-          resizeMode="cover"
-        />
-        <TouchableOpacity style={styles.muteBtn}>
-          <Ionicons name="volume-mute" size={20} color="#fff" />
-        </TouchableOpacity>
-      </View>
-
-      {/* Bottom video feed */}
-      <View style={styles.videoSection}>
-        <Image
-          source={{
-            uri: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde',
-          }}
-          style={styles.videoImage}
-          resizeMode="cover"
-        />
-        <TouchableOpacity style={[styles.muteBtn, { top: 10 }]}>
-          <Ionicons name="volume-mute" size={20} color="#fff" />
-        </TouchableOpacity>
-
-        <View style={styles.sideActions}>
-          <TouchableOpacity style={styles.iconWrap}>
-            <Ionicons name="share-social" size={28} color="#333" />
-            <Text style={styles.iconLabel}>824</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.iconWrap}>
-            <Ionicons name="chatbubble-ellipses" size={28} color="#333" />
-            <Text style={styles.iconLabel}>200</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.iconWrap}>
-            <Ionicons name="heart" size={28} color="#E91E63" />
-            <Text style={styles.iconLabel}>1.2k</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.userInfo}>
-          <Text style={styles.userText}>
-            <Text style={{ fontWeight: 'bold' }}>Lilian Espech</Text> •{' '}
-            <Text style={{ color: '#00CFFF' }}>Follow</Text>
-          </Text>
-          <Text style={styles.location}>Los Angeles, USA</Text>
-        </View>
-      </View>
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-  },
-  cameraPreview: {
-    height: 160,
-    margin: 16,
-    borderRadius: 16,
-    overflow: 'hidden',
-    position: 'relative',
-  },
-  cameraImage: {
-    width: '100%',
-    height: '100%',
-  },
-  muteBtn: {
-    position: 'absolute',
-    top: 10,
-    right: 10,
-    backgroundColor: '#0008',
-    padding: 6,
-    borderRadius: 20,
-  },
-  videoSection: {
-    flex: 1,
-    position: 'relative',
-  },
-  videoImage: {
-    width: '100%',
-    height: '100%',
-  },
-  sideActions: {
-    position: 'absolute',
-    right: 10,
-    bottom: 80,
-    alignItems: 'center',
-  },
-  iconWrap: {
-    marginBottom: 20,
-    alignItems: 'center',
-  },
-  iconLabel: {
-    fontSize: 12,
-    color: '#333',
-    marginTop: 2,
-  },
-  userInfo: {
-    position: 'absolute',
-    bottom: 20,
-    left: 16,
-  },
-  userText: {
-    color: '#000',
-    fontSize: 16,
-    marginBottom: 2,
-  },
-  location: {
-    fontSize: 12,
-    color: '#666',
-  },
-});
-
-// File: screens/RecordReactionScreen.tsx
-// File: screens/RecordReactionScreen.tsx
-
-import React, { useEffect, useRef, useState, useCallback } from "react";
-import {
-  View,
-  StyleSheet,
-  TouchableOpacity,
-  ActivityIndicator,
-  Text,
-  Dimensions,
-  Platform,
-  Alert,
-} from "react-native";
-import { VideoView, useVideoPlayer } from "expo-video";
-import {
-  CameraView,
-  useCameraPermissions,
-  useMicrophonePermissions,
-  PermissionStatus,
-} from "expo-camera";
-import type { CameraRecordingOptions } from "expo-camera";
-import { Ionicons } from "@expo/vector-icons";
-import { useNavigation, useRoute } from "@react-navigation/native";
-import { FeebStorage } from "../utils/FeebStorage";
-import WebCamera from "../components/WebCamera";
-import * as FileSystem from "expo-file-system";
-
-const { width: screenWidth } = Dimensions.get("screen");
-
-// Simple debug logger
-class DebugLogger {
-  static log(category: string, message: string, data?: any) {
-    const timestamp = new Date().toISOString().substr(11, 12);
-    console.log(
-      `[${timestamp}] 🔍 [${category}] ${message}`,
-      data ? JSON.stringify(data, null, 2) : ""
-    );
-  }
-  static error(category: string, message: string, error?: any) {
-    const timestamp = new Date().toISOString().substr(11, 12);
-    console.error(`[${timestamp}] ❌ [${category}] ${message}`, error);
-  }
-}
-
-export default function RecordReactionScreen() {
-  const navigation = useNavigation<any>();
-  const route = useRoute<any>();
-  const cameraRef = useRef<CameraView>(null);
-
-  // Permissions
-  const [cameraPermission, requestCameraPermission] =
-    useCameraPermissions();
-  const [micPermission, requestMicPermission] =
-    useMicrophonePermissions();
-
-  // Component state
-  const [videoReady, setVideoReady] = useState(false);
-  const [cameraReady, setCameraReady] = useState(false);
-  const [countdown, setCountdown] = useState<number | null>(null);
-  const [isRecording, setIsRecording] = useState(false);
-  const [hasStartedFlow, setHasStartedFlow] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-
-  // Recording refs
-  const isActivelyRecordingRef = useRef(false);
-  // Changed from NodeJS.Timeout to ReturnType<typeof setTimeout>
-  const stopTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
-    null
-  );
-  const webRecordingBlobRef = useRef<Blob | null>(null);
-  const recordingRef = useRef<Promise<any> | null>(null);
-  const recordingStartTimeRef = useRef<number | null>(null);
-
-  // Video to react to
-  const videoUri =
-    route.params?.videoUri ||
-    "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4";
-
-  // Expo Video player
-  const player = useVideoPlayer(videoUri, (player) => {
-    player.loop = false;
-    player.muted = false;
-  });
-
-  // Request permissions on native
-  useEffect(() => {
-    if (Platform.OS !== "web") {
-      if (
-        cameraPermission?.status !== PermissionStatus.GRANTED
-      ) {
-        DebugLogger.log("PERMISSIONS", "Requesting camera");
-        requestCameraPermission();
-      } else {
-        DebugLogger.log("PERMISSIONS", "Camera granted");
-      }
-      if (
-        micPermission?.status !== PermissionStatus.GRANTED
-      ) {
-        DebugLogger.log("PERMISSIONS", "Requesting mic");
-        requestMicPermission();
-      } else {
-        DebugLogger.log("PERMISSIONS", "Mic granted");
-      }
-    } else {
-      DebugLogger.log(
-        "PERMISSIONS",
-        "Web platform, skipping native perms"
-      );
-      setCameraReady(true);
-    }
-  }, [cameraPermission, micPermission]);
-
-  // Video ready listener
-  useEffect(() => {
-    const sub = player.addListener("statusChange", (status) => {
-      if (status.status === "readyToPlay" && !videoReady) {
-        setVideoReady(true);
-        DebugLogger.log("VIDEO", "readyToPlay", {
-          duration: player.duration,
-          currentTime: player.currentTime,
-        });
-      }
-    });
-    return () => sub?.remove();
-  }, [player, videoReady]);
-
-  // Kick off countdown once everything is ready
-  useEffect(() => {
-    const nativeReady =
-      cameraPermission?.granted && micPermission?.granted;
-    const allReady =
-      videoReady &&
-      (Platform.OS === "web" ? cameraReady : nativeReady);
-
-    if (
-      allReady &&
-      !hasStartedFlow &&
-      !isRecording &&
-      !isSaving
-    ) {
-      DebugLogger.log("FLOW", "Starting countdown");
-      setHasStartedFlow(true);
-      setCountdown(2);
-    }
-  }, [
-    videoReady,
-    cameraReady,
-    cameraPermission,
-    micPermission,
-    hasStartedFlow,
-    isRecording,
-    isSaving,
-  ]);
-
-  // Countdown timer
-  useEffect(() => {
-    if (countdown !== null) {
-      if (countdown > 0) {
-        const t = setTimeout(
-          () => setCountdown(countdown - 1),
-          1000
-        );
-        return () => clearTimeout(t);
-      } else {
-        setCountdown(null);
-        startRecording();
-      }
-    }
-  }, [countdown]);
-
-  // Validate recorded file
-  const validateRecordingFile = async (
-    uri: string
-  ): Promise<boolean> => {
-    try {
-      const info = await FileSystem.getInfoAsync(uri);
-      if (!info.exists || info.size === 0) return false;
-      const ext = uri.split(".").pop()?.toLowerCase() || "";
-      return ["mp4", "mov", "m4v", "avi"].includes(ext);
-    } catch {
-      return false;
-    }
-  };
-
-  // Start recording callback
-  const startRecording = useCallback(async () => {
-    DebugLogger.log("RECORDING", "startRecording");
-    if (isActivelyRecordingRef.current) return;
-
-    try {
-      isActivelyRecordingRef.current = true;
-      setIsRecording(true);
-      recordingStartTimeRef.current = Date.now();
-
-      // Play video
-      player.currentTime = 0;
-      player.play();
-
-      if (Platform.OS === "web") {
-        // WebCamera handles recording
-      } else {
-        if (!cameraRef.current) {
-          throw new Error("Camera not ready");
-        }
-        const opts: CameraRecordingOptions = { maxDuration: 60 };
-        recordingRef.current =
-          cameraRef.current.recordAsync(opts);
-      }
-
-      // Schedule stop
-      const durationMs =
-        Math.ceil((player.durati
+              "🔍 Error getting display UR

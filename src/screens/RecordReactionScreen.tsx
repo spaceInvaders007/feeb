@@ -23,6 +23,10 @@ import { useNavigation, useRoute } from "@react-navigation/native";
 import WebCamera from "../components/WebCamera";
 import * as FileSystem from "expo-file-system";
 import { FeebStorage } from "../utils/FeebStorage";
+import { useHeadphoneDetection } from "../hooks/useHeadphoneDetection";
+import HeadphoneStatus, {
+  HeadphoneIndicator,
+} from "../components/HeadphoneStatus";
 
 const { width: screenWidth } = Dimensions.get("screen");
 
@@ -66,6 +70,8 @@ export default function RecordReactionScreen() {
   const recordingRef = useRef<Promise<any> | null>(null);
   const recordingStartTimeRef = useRef<number | null>(null);
 
+  const { hasHeadphones } = useHeadphoneDetection();
+
   // Video to react to
   const videoUri =
     route.params?.videoUri ||
@@ -82,29 +88,41 @@ export default function RecordReactionScreen() {
     const checkPermissions = async () => {
       if (Platform.OS !== "web") {
         DebugLogger.log("PERMISSIONS", "Checking native permissions");
-        
+
         if (cameraPermission?.status !== PermissionStatus.GRANTED) {
           DebugLogger.log("PERMISSIONS", "Requesting camera");
           const result = await requestCameraPermission();
-          DebugLogger.log("PERMISSIONS", "Camera permission result", { granted: result.granted });
+          DebugLogger.log("PERMISSIONS", "Camera permission result", {
+            granted: result.granted,
+          });
         }
-        
+
         if (micPermission?.status !== PermissionStatus.GRANTED) {
           DebugLogger.log("PERMISSIONS", "Requesting microphone");
           const result = await requestMicPermission();
-          DebugLogger.log("PERMISSIONS", "Microphone permission result", { granted: result.granted });
+          DebugLogger.log("PERMISSIONS", "Microphone permission result", {
+            granted: result.granted,
+          });
           setAudioEnabled(result.granted);
         } else {
           setAudioEnabled(micPermission.granted);
         }
       } else {
-        DebugLogger.log("PERMISSIONS", "Web platform - permissions handled by WebCamera");
+        DebugLogger.log(
+          "PERMISSIONS",
+          "Web platform - permissions handled by WebCamera"
+        );
         setAudioEnabled(true); // Will be validated by WebCamera
       }
     };
 
     checkPermissions();
-  }, [cameraPermission, micPermission, requestCameraPermission, requestMicPermission]);
+  }, [
+    cameraPermission,
+    micPermission,
+    requestCameraPermission,
+    requestMicPermission,
+  ]);
 
   // Video ready listener
   useEffect(() => {
@@ -114,7 +132,7 @@ export default function RecordReactionScreen() {
         DebugLogger.log("VIDEO", "readyToPlay", {
           duration: player.duration,
           currentTime: player.currentTime,
-          muted: player.muted
+          muted: player.muted,
         });
       }
     });
@@ -123,7 +141,8 @@ export default function RecordReactionScreen() {
 
   // Start countdown when everything is ready
   useEffect(() => {
-    const nativeReady = Platform.OS === "web" || 
+    const nativeReady =
+      Platform.OS === "web" ||
       (cameraPermission?.granted && micPermission?.granted);
     const allReady = videoReady && cameraReady && nativeReady;
 
@@ -135,7 +154,7 @@ export default function RecordReactionScreen() {
       hasStartedFlow,
       isRecording,
       isSaving,
-      audioEnabled
+      audioEnabled,
     });
 
     if (allReady && !hasStartedFlow && !isRecording && !isSaving) {
@@ -151,7 +170,7 @@ export default function RecordReactionScreen() {
     hasStartedFlow,
     isRecording,
     isSaving,
-    audioEnabled
+    audioEnabled,
   ]);
 
   // Countdown timer
@@ -172,27 +191,33 @@ export default function RecordReactionScreen() {
     try {
       const info = await FileSystem.getInfoAsync(uri);
       if (!info.exists) {
-        DebugLogger.error("VALIDATION", "File doesn't exist", { uri, exists: info.exists });
+        DebugLogger.error("VALIDATION", "File doesn't exist", {
+          uri,
+          exists: info.exists,
+        });
         return false;
       }
-      
+
       // Check file size if it exists
-      if ('size' in info && info.size === 0) {
-        DebugLogger.error("VALIDATION", "File is empty", { uri, size: info.size });
+      if ("size" in info && info.size === 0) {
+        DebugLogger.error("VALIDATION", "File is empty", {
+          uri,
+          size: info.size,
+        });
         return false;
       }
-      
+
       const ext = uri.split(".").pop()?.toLowerCase() || "";
       const validExtensions = ["mp4", "mov", "m4v", "avi"];
       const isValidExt = validExtensions.includes(ext);
-      
-      DebugLogger.log("VALIDATION", "File validation", { 
-        uri, 
+
+      DebugLogger.log("VALIDATION", "File validation", {
+        uri,
         exists: info.exists,
-        extension: ext, 
-        isValid: isValidExt 
+        extension: ext,
+        isValid: isValidExt,
       });
-      
+
       return isValidExt;
     } catch (error) {
       DebugLogger.error("VALIDATION", "Validation error", error);
@@ -217,10 +242,10 @@ export default function RecordReactionScreen() {
       player.currentTime = 0;
       player.muted = false; // Enable audio so user can hear the original video
       player.play();
-      
-      DebugLogger.log("RECORDING", "Video playback started", { 
-        muted: player.muted, 
-        currentTime: player.currentTime 
+
+      DebugLogger.log("RECORDING", "Video playback started", {
+        muted: player.muted,
+        currentTime: player.currentTime,
       });
 
       if (Platform.OS === "web") {
@@ -230,41 +255,43 @@ export default function RecordReactionScreen() {
         if (!cameraRef.current) {
           throw new Error("Camera not ready");
         }
-        
+
         // Configure recording options with audio
-        const recordingOptions: CameraRecordingOptions = { 
+        const recordingOptions: CameraRecordingOptions = {
           maxDuration: 60,
           // Note: expo-camera automatically includes audio if microphone permission is granted
         };
-        
-        DebugLogger.log("RECORDING", "Starting native recording", { 
+
+        DebugLogger.log("RECORDING", "Starting native recording", {
           options: recordingOptions,
           micPermission: micPermission?.granted,
-          audioEnabled
+          audioEnabled,
         });
-        
+
         recordingRef.current = cameraRef.current.recordAsync(recordingOptions);
       }
 
       // Schedule automatic stop based on video duration
       const videoDuration = player.duration || 15; // Default to 15 seconds
       const recordingDuration = Math.ceil(videoDuration * 1000) + 2000; // Add 2s buffer
-      
-      DebugLogger.log("RECORDING", "Scheduling stop", { 
-        videoDuration, 
-        recordingDuration: recordingDuration / 1000 
+
+      DebugLogger.log("RECORDING", "Scheduling stop", {
+        videoDuration,
+        recordingDuration: recordingDuration / 1000,
       });
-      
+
       stopTimeoutRef.current = setTimeout(() => {
         DebugLogger.log("RECORDING", "Auto-stopping recording");
         stopRecording();
       }, recordingDuration);
-
     } catch (error: any) {
       DebugLogger.error("RECORDING", "Failed to start recording", error);
       isActivelyRecordingRef.current = false;
       setIsRecording(false);
-      Alert.alert("Recording Error", error.message || "Failed to start recording");
+      Alert.alert(
+        "Recording Error",
+        error.message || "Failed to start recording"
+      );
     }
   }, [player, micPermission, audioEnabled]);
 
@@ -279,7 +306,7 @@ export default function RecordReactionScreen() {
     isActivelyRecordingRef.current = false;
     setIsRecording(false);
     setIsSaving(true);
-    
+
     // Clear timeout
     if (stopTimeoutRef.current) {
       clearTimeout(stopTimeoutRef.current);
@@ -293,12 +320,12 @@ export default function RecordReactionScreen() {
       if (Platform.OS === "web") {
         DebugLogger.log("RECORDING", "Processing web recording");
         // Wait a moment for the blob to be ready
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+
         if (webRecordingBlobRef.current) {
-          DebugLogger.log("RECORDING", "Web blob ready", { 
+          DebugLogger.log("RECORDING", "Web blob ready", {
             size: webRecordingBlobRef.current.size,
-            type: webRecordingBlobRef.current.type
+            type: webRecordingBlobRef.current.type,
           });
           await saveWebRecording(webRecordingBlobRef.current);
         } else {
@@ -309,15 +336,15 @@ export default function RecordReactionScreen() {
         if (cameraRef.current) {
           cameraRef.current.stopRecording();
         }
-        
+
         if (recordingRef.current) {
           const recording = await recordingRef.current;
-          DebugLogger.log("RECORDING", "Native recording completed", { 
+          DebugLogger.log("RECORDING", "Native recording completed", {
             uri: recording?.uri,
-            duration: recording?.duration
+            duration: recording?.duration,
           });
-          
-          if (recording?.uri && await validateRecordingFile(recording.uri)) {
+
+          if (recording?.uri && (await validateRecordingFile(recording.uri))) {
             await saveMobileRecording(recording);
           } else {
             throw new Error("Invalid or empty recording file");
@@ -328,13 +355,16 @@ export default function RecordReactionScreen() {
       }
     } catch (error: any) {
       DebugLogger.error("RECORDING", "Failed to save recording", error);
-      Alert.alert("Save Error", error.message || "Failed to save your reaction");
+      Alert.alert(
+        "Save Error",
+        error.message || "Failed to save your reaction"
+      );
     } finally {
       setIsSaving(false);
       webRecordingBlobRef.current = null;
       recordingRef.current = null;
       recordingStartTimeRef.current = null;
-      
+
       // Navigate back after a short delay
       setTimeout(() => {
         navigation.goBack();
@@ -343,37 +373,47 @@ export default function RecordReactionScreen() {
   }, [navigation, player]);
 
   // Save mobile recording
-  const saveMobileRecording = useCallback(async (recording: any) => {
-    DebugLogger.log("SAVE", "Saving mobile recording", { uri: recording.uri });
-    
-    const permanentUri = await FeebStorage.saveVideoToPermanentLocation(recording.uri);
-    const newFeeb = FeebStorage.createFeeb(permanentUri, videoUri);
-    await FeebStorage.saveFeeb(newFeeb);
-    
-    DebugLogger.log("SAVE", "Mobile recording saved successfully");
-    Alert.alert("Success!", "Your reaction has been saved!");
-  }, [videoUri]);
+  const saveMobileRecording = useCallback(
+    async (recording: any) => {
+      DebugLogger.log("SAVE", "Saving mobile recording", {
+        uri: recording.uri,
+      });
+
+      const permanentUri = await FeebStorage.saveVideoToPermanentLocation(
+        recording.uri
+      );
+      const newFeeb = FeebStorage.createFeeb(permanentUri, videoUri);
+      await FeebStorage.saveFeeb(newFeeb);
+
+      DebugLogger.log("SAVE", "Mobile recording saved successfully");
+      Alert.alert("Success!", "Your reaction has been saved!");
+    },
+    [videoUri]
+  );
 
   // Save web recording
-  const saveWebRecording = useCallback(async (blob: Blob) => {
-    DebugLogger.log("SAVE", "Saving web recording", { 
-      size: blob.size, 
-      type: blob.type 
-    });
-    
-    const videoId = await FeebStorage.saveWebVideoBlob(blob);
-    const newFeeb = FeebStorage.createFeeb(videoId, videoUri);
-    await FeebStorage.saveFeeb(newFeeb);
-    
-    DebugLogger.log("SAVE", "Web recording saved successfully");
-    Alert.alert("Success!", "Your reaction has been saved!");
-  }, [videoUri]);
+  const saveWebRecording = useCallback(
+    async (blob: Blob) => {
+      DebugLogger.log("SAVE", "Saving web recording", {
+        size: blob.size,
+        type: blob.type,
+      });
+
+      const videoId = await FeebStorage.saveWebVideoBlob(blob);
+      const newFeeb = FeebStorage.createFeeb(videoId, videoUri);
+      await FeebStorage.saveFeeb(newFeeb);
+
+      DebugLogger.log("SAVE", "Web recording saved successfully");
+      Alert.alert("Success!", "Your reaction has been saved!");
+    },
+    [videoUri]
+  );
 
   // Handle web recording completion
   const handleWebRecordingComplete = useCallback((videoBlob: Blob) => {
-    DebugLogger.log("WEB_RECORDING", "Recording complete", { 
+    DebugLogger.log("WEB_RECORDING", "Recording complete", {
       size: videoBlob.size,
-      type: videoBlob.type
+      type: videoBlob.type,
     });
     webRecordingBlobRef.current = videoBlob;
   }, []);
@@ -391,22 +431,36 @@ export default function RecordReactionScreen() {
   }, [stopRecording]);
 
   // Check if everything is ready
-  const nativeReady = Platform.OS === "web" || 
+  const nativeReady =
+    Platform.OS === "web" ||
     (cameraPermission?.granted && micPermission?.granted);
   const allReady = videoReady && cameraReady && nativeReady;
 
   return (
     <View style={styles.container}>
+      <HeadphoneStatus
+        showWarning={!hasHeadphones}
+        onStatusChange={(connected) => {
+          console.log(
+            "🎧 Headphones:",
+            connected ? "connected" : "disconnected"
+          );
+        }}
+      />
+
+      <HeadphoneIndicator />
       {/* Back button */}
       <TouchableOpacity
         style={styles.backButton}
         onPress={() => navigation.goBack()}
         disabled={isRecording || isSaving}
       >
-        <View style={[
-          styles.backButtonCircle,
-          (isRecording || isSaving) && styles.disabledButton,
-        ]}>
+        <View
+          style={[
+            styles.backButtonCircle,
+            (isRecording || isSaving) && styles.disabledButton,
+          ]}
+        >
           <Ionicons name="arrow-back" size={24} color="#fff" />
         </View>
       </TouchableOpacity>
@@ -417,7 +471,12 @@ export default function RecordReactionScreen() {
           <View style={styles.redDot} />
           <Text style={styles.recordingText}>REC</Text>
           {audioEnabled && (
-            <Ionicons name="mic" size={16} color="#fff" style={{ marginLeft: 4 }} />
+            <Ionicons
+              name="mic"
+              size={16}
+              color="#fff"
+              style={{ marginLeft: 4 }}
+            />
           )}
           <TouchableOpacity
             style={styles.manualStopButton}
@@ -431,15 +490,17 @@ export default function RecordReactionScreen() {
       {/* Audio status indicator */}
       {allReady && !isRecording && !isSaving && (
         <View style={styles.audioStatus}>
-          <Ionicons 
-            name={audioEnabled ? "mic" : "mic-off"} 
-            size={16} 
-            color={audioEnabled ? "#00CFFF" : "#ff6b6b"} 
+          <Ionicons
+            name={audioEnabled ? "mic" : "mic-off"}
+            size={16}
+            color={audioEnabled ? "#00CFFF" : "#ff6b6b"}
           />
-          <Text style={[
-            styles.audioStatusText,
-            { color: audioEnabled ? "#00CFFF" : "#ff6b6b" }
-          ]}>
+          <Text
+            style={[
+              styles.audioStatusText,
+              { color: audioEnabled ? "#00CFFF" : "#ff6b6b" },
+            ]}
+          >
             {audioEnabled ? "Audio enabled" : "Audio disabled"}
           </Text>
         </View>
@@ -493,7 +554,10 @@ export default function RecordReactionScreen() {
           <Text style={styles.loadingText}>
             {!videoReady && "Loading video..."}
             {videoReady && !cameraReady && "Preparing camera..."}
-            {videoReady && cameraReady && !nativeReady && "Requesting permissions..."}
+            {videoReady &&
+              cameraReady &&
+              !nativeReady &&
+              "Requesting permissions..."}
           </Text>
           {Platform.OS !== "web" && !micPermission?.granted && (
             <Text style={styles.permissionText}>
@@ -523,18 +587,18 @@ export default function RecordReactionScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { 
-    flex: 1, 
-    backgroundColor: "#000" 
-  },
-  
-  half: { 
-    flex: 1, 
-    overflow: "hidden", 
+  container: {
+    flex: 1,
     backgroundColor: "#000",
-    position: "relative"
   },
-  
+
+  half: {
+    flex: 1,
+    overflow: "hidden",
+    backgroundColor: "#000",
+    position: "relative",
+  },
+
   video: {
     flex: 1,
     width: screenWidth,
@@ -548,16 +612,16 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0, 0, 0, 0.7)",
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 4
+    borderRadius: 4,
   },
   labelText: {
     color: "white",
     fontSize: 12,
-    fontWeight: "600"
+    fontWeight: "600",
   },
   labelSubtext: {
     color: "#ccc",
-    fontSize: 10
+    fontSize: 10,
   },
 
   backButton: {
@@ -574,8 +638,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  disabledButton: { 
-    opacity: 0.5 
+  disabledButton: {
+    opacity: 0.5,
   },
 
   recordingIndicator: {
@@ -624,7 +688,7 @@ const styles = StyleSheet.create({
   audioStatusText: {
     fontSize: 12,
     marginLeft: 4,
-    fontWeight: "600"
+    fontWeight: "600",
   },
 
   overlay: {
@@ -638,14 +702,14 @@ const styles = StyleSheet.create({
     color: "#fff",
     marginTop: 16,
     fontSize: 16,
-    textAlign: "center"
+    textAlign: "center",
   },
   permissionText: {
     color: "#ff6b6b",
     marginTop: 8,
     fontSize: 14,
     textAlign: "center",
-    paddingHorizontal: 32
+    paddingHorizontal: 32,
   },
   countdownText: {
     fontSize: 120,
@@ -657,6 +721,6 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 18,
     marginTop: 16,
-    textAlign: "center"
-  }
+    textAlign: "center",
+  },
 });
