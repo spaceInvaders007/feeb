@@ -5,12 +5,32 @@
     // turn off checking of default lib files (speeds up builds & avoids weird missing-lib errors)
     "skipLibCheck": true,
     // explicitly list the runtime libs you need (no more “node 2”!)
-    "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    "lib": [
+      "ESNext",
+      "DOM",
+      "DOM.Iterable"
+    ],
     // pick only the @types packages you actually use
-    "types": ["react", "react-native"],
+    "types": [
+      "react",
+      "react-native"
+    ],
     // where to look for those @types
-    "typeRoots": ["./node_modules/@types"]
+    "typeRoots": [
+      "./node_modules/@types"
+    ],
+    "paths": {
+      "expo-headphone-detection": [
+        "./modules/expo-headphone-detection/src"
+      ],
+      "expo-headphone-detection/*": [
+        "./modules/expo-headphone-detection/src/*"
+      ]
+    }
   },
   // don't accidentally include things under node_modules
-  "exclude": ["node_modules"]
+  "exclude": [
+    "node_modules",
+    "modules/expo-headphone-detection"
+  ]
 }

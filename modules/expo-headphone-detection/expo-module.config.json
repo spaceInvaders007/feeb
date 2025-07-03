@@ -1,9 +1,22 @@
 {
   "platforms": ["ios", "android", "web"],
   "ios": {
-    "modules": ["ExpoHeadphoneDetectionModule"]
+    "modules": ["ExpoHeadphoneDetectionModule"],
+    "infoPlist": {
+      "NSMicrophoneUsageDescription": "This app uses microphone access to detect connected audio devices and provide optimal recording experience."
+    },
+    "deploymentTarget": "13.0"
   },
   "android": {
-    "modules": ["expo.modules.headphonedetection.ExpoHeadphoneDetectionModule"]
+    "modules": ["expo.modules.headphonedetection.ExpoHeadphoneDetectionModule"],
+    "permissions": [
+      "android.permission.MODIFY_AUDIO_SETTINGS"
+    ],
+    "minSdkVersion": 23,
+    "compileSdkVersion": 34,
+    "targetSdkVersion": 34
+  },
+  "web": {
+    "moduleClassNames": ["ExpoHeadphoneDetectionModuleWeb"]
   }
 }

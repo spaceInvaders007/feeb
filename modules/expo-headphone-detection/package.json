@@ -1,19 +1,49 @@
 {
   "name": "expo-headphone-detection",
   "version": "1.0.0",
-  "description": "Production-grade headphone detection for Expo",
-  "main": "src/index.ts",
-  "types": "src/index.ts",
+  "description": "Production-grade headphone detection for Expo with enterprise reliability",
+  "main": "build/index.js",
+  "types": "build/index.d.ts",
   "scripts": {
-    "build": "expo-module build",
-    "clean": "expo-module clean"
+    "build": "tsc -b tsconfig.json",
+    "build:plugin": "cd plugin && tsc src/index.ts --outDir build --target es2017 --module commonjs --declaration --esModuleInterop",
+    "clean": "rm -rf build && rm -rf plugin/build",
+    "type-check": "tsc --noEmit"
   },
-  "keywords": ["expo", "headphones", "audio", "detection"],
+  "keywords": [
+    "expo",
+    "headphones",
+    "audio",
+    "detection",
+    "bluetooth"
+  ],
+  "author": {
+    "name": "Feeb Engineering Team",
+    "email": "engineering@feeb.app"
+  },
+  "license": "MIT",
   "peerDependencies": {
     "expo": "*",
-    "expo-modules-core": "*"
+    "expo-modules-core": "*",
+    "react": "*",
+    "react-native": "*"
+  },
+  "dependencies": {
+    "@expo/config-plugins": "^8.0.0"
   },
   "devDependencies": {
-    "expo-modules-core": "*"
-  }
+    "@expo/config-plugins": "^8.0.0",
+    "@expo/config-types": "^51.0.0",
+    "typescript": "^5.0.0"
+  },
+  "expo": {
+    "plugin": "./plugin/build/index.js"
+  },
+  "files": [
+    "build/",
+    "plugin/",
+    "android/",
+    "ios/",
+    "expo-module.config.json"
+  ]
 }
