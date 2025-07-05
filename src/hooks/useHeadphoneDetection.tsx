@@ -2,7 +2,7 @@
 import React, { createContext, useContext, ReactNode } from 'react';
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Platform } from 'react-native';
-import ExpoHeadphoneDetectionModule from '../../modules/expo-headphone-detection/src/ExpoHeadphoneDetectionModule';
+import ExpoHeadphoneDetectionModule from 'expo-headphone-detection';
 
 // MARK: - Types & Interfaces
 

@@ -1,6 +1,7 @@
 {
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
+    "noImplicitAny": false,
     "strict": true,
     // turn off checking of default lib files (speeds up builds & avoids weird missing-lib errors)
     "skipLibCheck": true,

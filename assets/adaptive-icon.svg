@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="adaptiveGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#00CFFF;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0099CC;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Android Adaptive Icon - must fill the entire safe area -->
+  <rect width="1024" height="1024" fill="url(#adaptiveGradient)"/>
+  
+  <!-- Centered Logo -->
+  <g transform="translate(512, 512)">
+    <!-- Main F Letter - larger for adaptive icon -->
+    <path d="M-160,-240 L-160,240 L-100,240 L-100,40 L80,40 L80,100 L-100,100 L-100,160 L40,160 L40,220 L-100,220 L-100,240 L-160,240 Z" 
+          fill="white" opacity="0.95"/>
+    
+    <!-- Play Button Accent -->
+    <circle cx="120" cy="-120" r="70" fill="white" opacity="0.9"/>
+    <path d="M95,-145 L95,-95 L145,-120 Z" fill="#00CFFF"/>
+  </g>
+</svg>

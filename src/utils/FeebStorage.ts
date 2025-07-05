@@ -19,7 +19,16 @@ export class FeebStorage {
   static async getAllFeebs(): Promise<Feeb[]> {
     try {
       const feebsJson = await AsyncStorage.getItem(FEEBS_STORAGE_KEY);
-      const feebs = feebsJson ? JSON.parse(feebsJson) : [];
+    let feebs: Feeb[] = [];
+    try {
+      feebs = feebsJson ? JSON.parse(feebsJson) : [];
+    } catch (error) {
+      console.log('⚠️ Error parsing feebs JSON, resetting storage:', error);
+      console.log('📄 Received data:', feebsJson?.substring(0, 100));
+      await AsyncStorage.removeItem(FEEBS_STORAGE_KEY);
+      feebs = [];
+    }
+
       
       // Clean up any old blob URLs automatically
       if (Platform.OS === 'web') {
@@ -95,7 +104,7 @@ export class FeebStorage {
       const chunkSize = 1000000; // 1MB chunks
       if (dataUrl.length > chunkSize) {
         console.log('📦 Large data URL detected, chunking...');
-        const chunks = [];
+        const chunks: string[] = [];
         for (let i = 0; i < dataUrl.length; i += chunkSize) {
           chunks.push(dataUrl.substring(i, i + chunkSize));
         }
@@ -138,7 +147,7 @@ export class FeebStorage {
         const chunkCount = parseInt(chunkCountStr, 10);
         console.log(`📦 Reassembling ${chunkCount} chunks for video:`, videoId);
         
-        const chunks = [];
+        const chunks: string[] = [];
         for (let i = 0; i < chunkCount; i++) {
           const chunk = await AsyncStorage.getItem(`${storageKey}_chunk_${i}`);
           if (chunk) {
@@ -313,10 +322,17 @@ export class FeebStorage {
 
     try {
       const feebs = await AsyncStorage.getItem(FEEBS_STORAGE_KEY);
-      const feebList: Feeb[] = feebs ? JSON.parse(feebs) : [];
-      
+      let feebList: Feeb[] = [];
+      try {
+        feebList = feebs ? JSON.parse(feebs) : [];
+      } catch (error) {
+        console.log('⚠️ Error parsing feebs JSON in clearInvalidWebVideos:', error);
+        console.log('📄 Received data:', feebs?.substring(0, 100));
+        feebList = [];
+      }
+            
       let deletedCount = 0;
-      const validFeebs = [];
+      const validFeebs: Feeb[] = [];
       
       for (const feeb of feebList) {
         if (feeb.isWebBlob && feeb.uri.startsWith('blob:')) {

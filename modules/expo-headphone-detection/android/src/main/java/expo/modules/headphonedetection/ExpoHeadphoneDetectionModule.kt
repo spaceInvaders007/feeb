@@ -4,6 +4,7 @@ import android.content.Context
 import android.media.AudioManager
 import android.media.AudioDeviceInfo
 import android.os.Build
+import androidx.annotation.RequiresApi
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import expo.modules.kotlin.Promise
@@ -40,7 +41,7 @@ class ExpoHeadphoneDetectionModule : Module() {
     }
   }
 
-  private val context
+  private val context: Context
     get() = requireNotNull(appContext.reactContext)
 
   private fun getCurrentHeadphoneStatus(): Map<String, Any> {

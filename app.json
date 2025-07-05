@@ -1,62 +1,134 @@
 {
   "expo": {
-    "name": "feeb",
+    "name": "Feeb",
     "slug": "feeb",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
-    "newArchEnabled": true,
+    "userInterfaceStyle": "automatic",
     "splash": {
-      "image": "./assets/splash-icon.png",
+      "image": "./assets/splash.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.yourcompany.feeb"
+      "bundleIdentifier": "com.feeb.app",
+      "buildNumber": "1",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "Feeb uses microphone access to detect connected audio devices and provide optimal recording experience.",
+        "NSCameraUsageDescription": "Feeb uses camera access to record video reactions to content.",
+        "NSPhotoLibraryUsageDescription": "Feeb may access your photo library to save recorded reactions.",
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "privacyManifests": {
+        "NSPrivacyCollectedDataTypes": [
+          {
+            "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataTypeAudioData",
+            "NSPrivacyCollectedDataTypeLinked": false,
+            "NSPrivacyCollectedDataTypeTracking": false,
+            "NSPrivacyCollectedDataTypePurposes": [
+              "NSPrivacyCollectedDataTypePurposeAppFunctionality"
+            ]
+          }
+        ],
+        "NSPrivacyAccessedAPITypes": [
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryUserDefaults",
+            "NSPrivacyAccessedAPITypeReasons": [
+              "CA92.1"
+            ]
+          }
+        ]
+      }
     },
     "android": {
+      "package": "com.feeb.app",
+      "versionCode": 1,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#FFFFFF"
       },
-      "edgeToEdgeEnabled": true,
       "permissions": [
-        "CAMERA",
         "RECORD_AUDIO",
-        "WRITE_EXTERNAL_STORAGE",
+        "CAMERA",
         "MODIFY_AUDIO_SETTINGS",
-        "BLUETOOTH",
-        "BLUETOOTH_ADMIN",
-        "android.permission.CAMERA",
-        "android.permission.RECORD_AUDIO",
-        "android.permission.MODIFY_AUDIO_SETTINGS"
+        "INTERNET",
+        "ACCESS_NETWORK_STATE",
+        "WAKE_LOCK"
       ],
-      "package": "com.yourcompany.feeb"
+      "allowBackup": false,
+      "softwareKeyboardLayoutMode": "pan"
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro",
+      "output": "static",
+      "lang": "en"
     },
     "plugins": [
-      "expo-dev-client",
       [
-        "expo-camera",
+        "expo-build-properties",
         {
-          "cameraPermission": "Allow Feeb to access your camera to record reactions."
+          "android": {
+            "compileSdkVersion": 35,
+            "targetSdkVersion": 35,
+            "minSdkVersion": 24,
+            "buildToolsVersion": "35.0.0",
+            "kotlinVersion": "2.0.21",
+            "enableProguardInReleaseBuilds": true,
+            "enableHermes": true,
+            "packagingOptions": {
+              "exclude": [
+                "META-INF/DEPENDENCIES",
+                "META-INF/LICENSE",
+                "META-INF/LICENSE.txt",
+                "META-INF/license.txt",
+                "META-INF/NOTICE",
+                "META-INF/NOTICE.txt",
+                "META-INF/notice.txt",
+                "META-INF/ASL2.0",
+                "META-INF/*.kotlin_module"
+              ]
+            }
+          },
+          "ios": {
+            "deploymentTarget": "15.1",
+            "useFrameworks": "static"
+          }
         }
       ],
-      [
-        "expo-av",
-        {
-          "microphonePermission": "Allow Feeb to access your microphone to record audio."
-        }
-      ]
+      "expo-dev-client",
+      "expo-router",
+      "expo-video"
     ],
     "extra": {
+      "feeb": {
+        "apiUrl": "https://api.feeb.app",
+        "version": "1.0.0",
+        "buildDate": "2025-01-03"
+      },
       "eas": {
         "projectId": "56d9b1ec-e143-4ab2-a906-9e424f45e203"
       }
-    }
+    },
+    "scheme": "feeb",
+    "developmentClient": {
+      "silentLaunch": false
+    },
+    "updates": {
+      "fallbackToCacheTimeout": 0,
+      "url": "https://u.expo.dev/your-project-id-here"
+    },
+    "runtimeVersion": "1.0.0",
+    "owner": "isenese"
   }
 }

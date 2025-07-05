@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "target": "es2017",
+    "module": "commonjs",
+    "lib": ["es2017"],
+    "outDir": "./build",
+    "rootDir": "./src",
+    "strict": false,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "declaration": true,
+    "moduleResolution": "node",
+    "allowSyntheticDefaultImports": true,
+    "isolatedModules": true,
+    "typeRoots": [],
+    "types": []
+  },
+  "files": [
+    "./src/index.ts"
+  ]
+}

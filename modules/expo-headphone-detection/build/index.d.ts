@@ -1,4 +1,5 @@
-import ExpoHeadphoneDetectionModuleInstance, { DetectionMetrics, HeadphoneInfo } from './ExpoHeadphoneDetectionModule';
+import ExpoHeadphoneDetectionModuleInstance from './ExpoHeadphoneDetectionModule';
+import type { HeadphoneInfo, DetectionMetrics } from './ExpoHeadphoneDetectionModule';
 export default ExpoHeadphoneDetectionModuleInstance;
 export type { HeadphoneInfo, DetectionMetrics, HeadphoneListener } from './ExpoHeadphoneDetectionModule';
 export interface UseHeadphoneDetectionOptions {

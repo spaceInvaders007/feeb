@@ -4,31 +4,47 @@ apply plugin: 'kotlin-android'
 group = 'expo.modules.headphonedetection'
 version = '1.0.0'
 
-def safeExtGet(prop, fallback) {
-  rootProject.ext.has(prop) ? rootProject.ext.get(prop) : fallback
+buildscript {
+  def expoModulesCorePlugin = new File(project(":expo-modules-core").projectDir.absolutePath, "ExpoModulesCorePlugin.gradle")
+  if (expoModulesCorePlugin.exists()) {
+    apply from: expoModulesCorePlugin
+    applyKotlinExpoModulesCorePlugin()
+  }
+
+  // Simple helper that allows the root project to override versions declared by this library.
+  ext.safeExtGet = { prop, fallback ->
+    rootProject.ext.has(prop) ? rootProject.ext.get(prop) : fallback
+  }
 }
 
 android {
-  compileSdkVersion safeExtGet("compileSdkVersion", 34)
+  namespace 'expo.modules.headphonedetection'
+  compileSdkVersion safeExtGet("compileSdkVersion", 35)
 
   defaultConfig {
-    minSdkVersion safeExtGet("minSdkVersion", 23)
-    targetSdkVersion safeExtGet("targetSdkVersion", 34)
+    minSdkVersion safeExtGet("minSdkVersion", 24)
+    targetSdkVersion safeExtGet("targetSdkVersion", 35)
     versionCode 1
     versionName "1.0.0"
   }
 
-  compileOptions {
-    sourceCompatibility JavaVersion.VERSION_11
-    targetCompatibility JavaVersion.VERSION_11
-  }
-
-  kotlinOptions {
-    jvmTarget = JavaVersion.VERSION_11.majorVersion
+  buildTypes {
+    release {
+      minifyEnabled false
+    }
   }
 
   lintOptions {
     abortOnError false
+  }
+
+  compileOptions {
+    sourceCompatibility JavaVersion.VERSION_17
+    targetCompatibility JavaVersion.VERSION_17
+  }
+
+  kotlinOptions {
+    jvmTarget = "17"
   }
 }
 
@@ -38,5 +54,5 @@ repositories {
 
 dependencies {
   implementation project(':expo-modules-core')
-  implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.8.10"
+  implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8:2.0.21"
 }

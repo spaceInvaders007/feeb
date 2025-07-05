@@ -1,18 +1,36 @@
 "use strict";
 // modules/expo-headphone-detection/src/ExpoHeadphoneDetectionModule.ts
-var __extends = (this && this.__extends) || (function () {
-    var extendStatics = function (d, b) {
-        extendStatics = Object.setPrototypeOf ||
-            ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
-            function (d, b) { for (var p in b) if (Object.prototype.hasOwnProperty.call(b, p)) d[p] = b[p]; };
-        return extendStatics(d, b);
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
     };
-    return function (d, b) {
-        if (typeof b !== "function" && b !== null)
-            throw new TypeError("Class extends value " + String(b) + " is not a constructor or null");
-        extendStatics(d, b);
-        function __() { this.constructor = d; }
-        d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
     };
 })();
 var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
@@ -24,253 +42,154 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
         step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
 };
-var __generator = (this && this.__generator) || function (thisArg, body) {
-    var _ = { label: 0, sent: function() { if (t[0] & 1) throw t[1]; return t[1]; }, trys: [], ops: [] }, f, y, t, g = Object.create((typeof Iterator === "function" ? Iterator : Object).prototype);
-    return g.next = verb(0), g["throw"] = verb(1), g["return"] = verb(2), typeof Symbol === "function" && (g[Symbol.iterator] = function() { return this; }), g;
-    function verb(n) { return function (v) { return step([n, v]); }; }
-    function step(op) {
-        if (f) throw new TypeError("Generator is already executing.");
-        while (g && (g = 0, op[0] && (_ = 0)), _) try {
-            if (f = 1, y && (t = op[0] & 2 ? y["return"] : op[0] ? y["throw"] || ((t = y["return"]) && t.call(y), 0) : y.next) && !(t = t.call(y, op[1])).done) return t;
-            if (y = 0, t) op = [op[0] & 2, t.value];
-            switch (op[0]) {
-                case 0: case 1: t = op; break;
-                case 4: _.label++; return { value: op[1], done: false };
-                case 5: _.label++; y = op[1]; op = [0]; continue;
-                case 7: op = _.ops.pop(); _.trys.pop(); continue;
-                default:
-                    if (!(t = _.trys, t = t.length > 0 && t[t.length - 1]) && (op[0] === 6 || op[0] === 2)) { _ = 0; continue; }
-                    if (op[0] === 3 && (!t || (op[1] > t[0] && op[1] < t[3]))) { _.label = op[1]; break; }
-                    if (op[0] === 6 && _.label < t[1]) { _.label = t[1]; t = op; break; }
-                    if (t && _.label < t[2]) { _.label = t[2]; _.ops.push(op); break; }
-                    if (t[2]) _.ops.pop();
-                    _.trys.pop(); continue;
-            }
-            op = body.call(thisArg, _);
-        } catch (e) { op = [6, e]; y = 0; } finally { f = t = 0; }
-        if (op[0] & 5) throw op[1]; return { value: op[0] ? op[1] : void 0, done: true };
-    }
-};
 Object.defineProperty(exports, "__esModule", { value: true });
-var react_native_1 = require("react-native");
-var expo_modules_core_1 = require("expo-modules-core");
+const react_native_1 = require("react-native");
+const expo_modules_core_1 = require("expo-modules-core");
 // MARK: - Platform-Specific Module Loading
-var ExpoHeadphoneDetectionModule = /** @class */ (function (_super) {
-    __extends(ExpoHeadphoneDetectionModule, _super);
-    function ExpoHeadphoneDetectionModule() {
-        var _this = _super.call(this) || this;
-        _this.isWebModuleLoaded = false;
+class ExpoHeadphoneDetectionModule extends expo_modules_core_1.EventEmitter {
+    constructor() {
+        super();
+        this.isWebModuleLoaded = false;
         if (react_native_1.Platform.OS === 'web') {
             // Load web module asynchronously
-            _this.loadWebModule();
+            this.loadWebModule();
         }
         else {
             // Load native module
-            _this.nativeModule = expo_modules_core_1.NativeModulesProxy.ExpoHeadphoneDetection;
-            if (!_this.nativeModule) {
+            this.nativeModule = expo_modules_core_1.NativeModulesProxy.ExpoHeadphoneDetection;
+            if (!this.nativeModule) {
                 console.warn('ExpoHeadphoneDetection native module is not available. ' +
                     'Make sure you have rebuilt your app with expo-dev-client after installing the module.');
             }
         }
-        return _this;
     }
-    ExpoHeadphoneDetectionModule.prototype.loadWebModule = function () {
-        return __awaiter(this, void 0, void 0, function () {
-            var webModuleImport, error_1;
-            return __generator(this, function (_a) {
-                switch (_a.label) {
-                    case 0:
-                        if (this.isWebModuleLoaded) {
-                            return [2 /*return*/];
-                        }
-                        _a.label = 1;
-                    case 1:
-                        _a.trys.push([1, 3, , 4]);
-                        return [4 /*yield*/, Promise.resolve().then(function () { return require('./ExpoHeadphoneDetectionModule.web'); })];
-                    case 2:
-                        webModuleImport = _a.sent();
-                        this.webModule = webModuleImport.default;
-                        this.isWebModuleLoaded = true;
-                        return [3 /*break*/, 4];
-                    case 3:
-                        error_1 = _a.sent();
-                        console.error('Failed to load web module:', error_1);
-                        throw new Error('Web headphone detection module is not available');
-                    case 4: return [2 /*return*/];
-                }
-            });
+    loadWebModule() {
+        return __awaiter(this, void 0, void 0, function* () {
+            if (this.isWebModuleLoaded) {
+                return;
+            }
+            try {
+                const webModuleImport = yield Promise.resolve().then(() => __importStar(require('./ExpoHeadphoneDetectionModule.web.js')));
+                this.webModule = webModuleImport.default;
+                this.isWebModuleLoaded = true;
+            }
+            catch (error) {
+                console.error('Failed to load web module:', error);
+                throw new Error('Web headphone detection module is not available');
+            }
         });
-    };
-    ExpoHeadphoneDetectionModule.prototype.getActiveModule = function () {
-        return __awaiter(this, void 0, void 0, function () {
-            return __generator(this, function (_a) {
-                switch (_a.label) {
-                    case 0:
-                        if (!(react_native_1.Platform.OS === 'web')) return [3 /*break*/, 3];
-                        if (!!this.isWebModuleLoaded) return [3 /*break*/, 2];
-                        return [4 /*yield*/, this.loadWebModule()];
-                    case 1:
-                        _a.sent();
-                        _a.label = 2;
-                    case 2:
-                        if (!this.webModule) {
-                            throw new Error('Web module not loaded. Please ensure proper initialization.');
-                        }
-                        return [2 /*return*/, this.webModule];
-                    case 3:
-                        if (!this.nativeModule) {
-                            throw new Error('Native module not available. Please check your development build.');
-                        }
-                        return [2 /*return*/, this.nativeModule];
+    }
+    getActiveModule() {
+        return __awaiter(this, void 0, void 0, function* () {
+            if (react_native_1.Platform.OS === 'web') {
+                if (!this.isWebModuleLoaded) {
+                    yield this.loadWebModule();
                 }
-            });
+                if (!this.webModule) {
+                    throw new Error('Web module not loaded. Please ensure proper initialization.');
+                }
+                return this.webModule;
+            }
+            else {
+                if (!this.nativeModule) {
+                    throw new Error('Native module not available. Please check your development build.');
+                }
+                return this.nativeModule;
+            }
         });
-    };
+    }
     // MARK: - Core Detection Methods
-    ExpoHeadphoneDetectionModule.prototype.getCurrentStatus = function () {
-        return __awaiter(this, void 0, void 0, function () {
-            var module_1, result, error_2;
-            return __generator(this, function (_a) {
-                switch (_a.label) {
-                    case 0:
-                        _a.trys.push([0, 3, , 4]);
-                        return [4 /*yield*/, this.getActiveModule()];
-                    case 1:
-                        module_1 = _a.sent();
-                        return [4 /*yield*/, module_1.getCurrentStatus()];
-                    case 2:
-                        result = _a.sent();
-                        // Ensure consistent return format across platforms
-                        return [2 /*return*/, {
-                                isConnected: Boolean(result.isConnected),
-                                deviceType: result.deviceType || 'none',
-                                deviceName: result.deviceName || '',
-                                confidence: typeof result.confidence === 'number' ? result.confidence : 0,
-                                timestamp: typeof result.timestamp === 'number' ? result.timestamp : Date.now(),
-                                metadata: result.metadata || {}
-                            }];
-                    case 3:
-                        error_2 = _a.sent();
-                        console.error('getCurrentStatus failed:', error_2);
-                        throw this.normalizeError(error_2);
-                    case 4: return [2 /*return*/];
-                }
-            });
+    getCurrentStatus() {
+        return __awaiter(this, void 0, void 0, function* () {
+            try {
+                const module = yield this.getActiveModule();
+                const result = yield module.getCurrentStatus();
+                // Ensure consistent return format across platforms
+                return {
+                    isConnected: Boolean(result.isConnected),
+                    deviceType: result.deviceType || 'none',
+                    deviceName: result.deviceName || '',
+                    confidence: typeof result.confidence === 'number' ? result.confidence : 0,
+                    timestamp: typeof result.timestamp === 'number' ? result.timestamp : Date.now(),
+                    metadata: result.metadata || {}
+                };
+            }
+            catch (error) {
+                console.error('getCurrentStatus failed:', error);
+                throw this.normalizeError(error);
+            }
         });
-    };
-    ExpoHeadphoneDetectionModule.prototype.startListening = function () {
-        return __awaiter(this, void 0, void 0, function () {
-            var module_2, error_3;
-            return __generator(this, function (_a) {
-                switch (_a.label) {
-                    case 0:
-                        _a.trys.push([0, 3, , 4]);
-                        return [4 /*yield*/, this.getActiveModule()];
-                    case 1:
-                        module_2 = _a.sent();
-                        return [4 /*yield*/, module_2.startListening()];
-                    case 2:
-                        _a.sent();
-                        return [3 /*break*/, 4];
-                    case 3:
-                        error_3 = _a.sent();
-                        console.error('startListening failed:', error_3);
-                        throw this.normalizeError(error_3);
-                    case 4: return [2 /*return*/];
-                }
-            });
+    }
+    startListening() {
+        return __awaiter(this, void 0, void 0, function* () {
+            try {
+                const module = yield this.getActiveModule();
+                yield module.startListening();
+            }
+            catch (error) {
+                console.error('startListening failed:', error);
+                throw this.normalizeError(error);
+            }
         });
-    };
-    ExpoHeadphoneDetectionModule.prototype.stopListening = function () {
-        return __awaiter(this, void 0, void 0, function () {
-            var module_3, error_4;
-            return __generator(this, function (_a) {
-                switch (_a.label) {
-                    case 0:
-                        _a.trys.push([0, 3, , 4]);
-                        return [4 /*yield*/, this.getActiveModule()];
-                    case 1:
-                        module_3 = _a.sent();
-                        return [4 /*yield*/, module_3.stopListening()];
-                    case 2:
-                        _a.sent();
-                        return [3 /*break*/, 4];
-                    case 3:
-                        error_4 = _a.sent();
-                        console.error('stopListening failed:', error_4);
-                        throw this.normalizeError(error_4);
-                    case 4: return [2 /*return*/];
-                }
-            });
+    }
+    stopListening() {
+        return __awaiter(this, void 0, void 0, function* () {
+            try {
+                const module = yield this.getActiveModule();
+                yield module.stopListening();
+            }
+            catch (error) {
+                console.error('stopListening failed:', error);
+                throw this.normalizeError(error);
+            }
         });
-    };
+    }
     // MARK: - Advanced Features
-    ExpoHeadphoneDetectionModule.prototype.getDetectionMetrics = function () {
-        return __awaiter(this, void 0, void 0, function () {
-            var module_4, metrics, error_5;
-            return __generator(this, function (_a) {
-                switch (_a.label) {
-                    case 0:
-                        _a.trys.push([0, 3, , 4]);
-                        return [4 /*yield*/, this.getActiveModule()];
-                    case 1:
-                        module_4 = _a.sent();
-                        if (!module_4.getDetectionMetrics) {
-                            console.warn('getDetectionMetrics not supported on this platform');
-                            return [2 /*return*/, null];
-                        }
-                        return [4 /*yield*/, module_4.getDetectionMetrics()];
-                    case 2:
-                        metrics = _a.sent();
-                        return [2 /*return*/, {
-                                detectionLatency: typeof metrics.detectionLatency === 'number' ? metrics.detectionLatency : 0,
-                                accuracyScore: typeof metrics.accuracyScore === 'number' ? metrics.accuracyScore : 0,
-                                deviceCount: typeof metrics.deviceCount === 'number' ? metrics.deviceCount : 0,
-                                errorCount: typeof metrics.errorCount === 'number' ? metrics.errorCount : 0,
-                                lastError: metrics.lastError || null
-                            }];
-                    case 3:
-                        error_5 = _a.sent();
-                        console.error('getDetectionMetrics failed:', error_5);
-                        return [2 /*return*/, null];
-                    case 4: return [2 /*return*/];
+    getDetectionMetrics() {
+        return __awaiter(this, void 0, void 0, function* () {
+            try {
+                const module = yield this.getActiveModule();
+                if (!module.getDetectionMetrics) {
+                    console.warn('getDetectionMetrics not supported on this platform');
+                    return null;
                 }
-            });
+                const metrics = yield module.getDetectionMetrics();
+                return {
+                    detectionLatency: typeof metrics.detectionLatency === 'number' ? metrics.detectionLatency : 0,
+                    accuracyScore: typeof metrics.accuracyScore === 'number' ? metrics.accuracyScore : 0,
+                    deviceCount: typeof metrics.deviceCount === 'number' ? metrics.deviceCount : 0,
+                    errorCount: typeof metrics.errorCount === 'number' ? metrics.errorCount : 0,
+                    lastError: metrics.lastError || null
+                };
+            }
+            catch (error) {
+                console.error('getDetectionMetrics failed:', error);
+                return null;
+            }
         });
-    };
-    ExpoHeadphoneDetectionModule.prototype.resetCircuitBreaker = function () {
-        return __awaiter(this, void 0, void 0, function () {
-            var module_5, error_6;
-            return __generator(this, function (_a) {
-                switch (_a.label) {
-                    case 0:
-                        _a.trys.push([0, 5, , 6]);
-                        return [4 /*yield*/, this.getActiveModule()];
-                    case 1:
-                        module_5 = _a.sent();
-                        if (!module_5.resetCircuitBreaker) {
-                            console.warn('resetCircuitBreaker not supported on this platform');
-                            return [2 /*return*/];
-                        }
-                        if (!(typeof module_5.resetCircuitBreaker === 'function')) return [3 /*break*/, 3];
-                        return [4 /*yield*/, module_5.resetCircuitBreaker()];
-                    case 2:
-                        _a.sent();
-                        return [3 /*break*/, 4];
-                    case 3:
-                        module_5.resetCircuitBreaker();
-                        _a.label = 4;
-                    case 4: return [3 /*break*/, 6];
-                    case 5:
-                        error_6 = _a.sent();
-                        console.error('resetCircuitBreaker failed:', error_6);
-                        throw this.normalizeError(error_6);
-                    case 6: return [2 /*return*/];
+    }
+    resetCircuitBreaker() {
+        return __awaiter(this, void 0, void 0, function* () {
+            try {
+                const module = yield this.getActiveModule();
+                if (!module.resetCircuitBreaker) {
+                    console.warn('resetCircuitBreaker not supported on this platform');
+                    return;
                 }
-            });
+                if (typeof module.resetCircuitBreaker === 'function') {
+                    yield module.resetCircuitBreaker();
+                }
+                else {
+                    module.resetCircuitBreaker();
+                }
+            }
+            catch (error) {
+                console.error('resetCircuitBreaker failed:', error);
+                throw this.normalizeError(error);
+            }
         });
-    };
-    ExpoHeadphoneDetectionModule.prototype.isCircuitBreakerOpen = function () {
+    }
+    isCircuitBreakerOpen() {
         var _a, _b, _c, _d;
         try {
             if (react_native_1.Platform.OS === 'web' && this.webModule) {
@@ -285,9 +204,9 @@ var ExpoHeadphoneDetectionModule = /** @class */ (function (_super) {
             console.error('isCircuitBreakerOpen failed:', error);
             return false;
         }
-    };
+    }
     // MARK: - Web-Specific Methods
-    ExpoHeadphoneDetectionModule.prototype.getPermissionState = function () {
+    getPermissionState() {
         if (react_native_1.Platform.OS !== 'web') {
             return null;
         }
@@ -301,45 +220,33 @@ var ExpoHeadphoneDetectionModule = /** @class */ (function (_super) {
             console.error('getPermissionState failed:', error);
             return 'unknown';
         }
-    };
-    ExpoHeadphoneDetectionModule.prototype.requestPermissions = function () {
-        return __awaiter(this, void 0, void 0, function () {
-            var module_6, result, error_7;
-            return __generator(this, function (_a) {
-                switch (_a.label) {
-                    case 0:
-                        if (react_native_1.Platform.OS !== 'web') {
-                            return [2 /*return*/, { granted: true }];
-                        }
-                        _a.label = 1;
-                    case 1:
-                        _a.trys.push([1, 4, , 5]);
-                        return [4 /*yield*/, this.getActiveModule()];
-                    case 2:
-                        module_6 = _a.sent();
-                        if (!module_6.requestPermissions) {
-                            return [2 /*return*/, { granted: false, error: 'Permission request not supported' }];
-                        }
-                        return [4 /*yield*/, module_6.requestPermissions()];
-                    case 3:
-                        result = _a.sent();
-                        return [2 /*return*/, {
-                                granted: Boolean(result.granted),
-                                error: result.error
-                            }];
-                    case 4:
-                        error_7 = _a.sent();
-                        console.error('requestPermissions failed:', error_7);
-                        return [2 /*return*/, {
-                                granted: false,
-                                error: error_7 instanceof Error ? error_7.message : String(error_7)
-                            }];
-                    case 5: return [2 /*return*/];
+    }
+    requestPermissions() {
+        return __awaiter(this, void 0, void 0, function* () {
+            if (react_native_1.Platform.OS !== 'web') {
+                return { granted: true };
+            }
+            try {
+                const module = yield this.getActiveModule();
+                if (!module.requestPermissions) {
+                    return { granted: false, error: 'Permission request not supported' };
                 }
-            });
+                const result = yield module.requestPermissions();
+                return {
+                    granted: Boolean(result.granted),
+                    error: result.error
+                };
+            }
+            catch (error) {
+                console.error('requestPermissions failed:', error);
+                return {
+                    granted: false,
+                    error: error instanceof Error ? error.message : String(error)
+                };
+            }
         });
-    };
-    ExpoHeadphoneDetectionModule.prototype.invalidateCache = function () {
+    }
+    invalidateCache() {
         if (react_native_1.Platform.OS !== 'web') {
             return;
         }
@@ -351,14 +258,14 @@ var ExpoHeadphoneDetectionModule = /** @class */ (function (_super) {
         catch (error) {
             console.error('invalidateCache failed:', error);
         }
-    };
-    ExpoHeadphoneDetectionModule.prototype.getCacheInfo = function () {
+    }
+    getCacheInfo() {
         if (react_native_1.Platform.OS !== 'web') {
             return null;
         }
         try {
             if (this.webModule && this.webModule.getCacheInfo) {
-                var info = this.webModule.getCacheInfo();
+                const info = this.webModule.getCacheInfo();
                 return {
                     size: typeof info.size === 'number' ? info.size : 0,
                     lastUpdate: typeof info.lastUpdate === 'number' ? info.lastUpdate : null
@@ -370,42 +277,42 @@ var ExpoHeadphoneDetectionModule = /** @class */ (function (_super) {
             console.error('getCacheInfo failed:', error);
             return null;
         }
-    };
+    }
     // MARK: - Event Management
-    ExpoHeadphoneDetectionModule.prototype.addListener = function (eventName, listener) {
+    addListener(eventName, listener) {
         try {
             if (react_native_1.Platform.OS === 'web' && this.webModule) {
                 // Web module extends EventEmitter directly
-                var subscription_1 = this.webModule.addListener(eventName, listener);
+                const subscription = this.webModule.addListener(eventName, listener);
                 return {
-                    remove: function () { return subscription_1.remove(); }
+                    remove: () => subscription.remove()
                 };
             }
             else if (this.nativeModule) {
                 // Native module through Expo modules
-                var subscription_2 = this.nativeModule.addListener(eventName, listener);
+                const subscription = this.nativeModule.addListener(eventName, listener);
                 return {
-                    remove: function () {
-                        if (subscription_2 && subscription_2.remove) {
-                            subscription_2.remove();
+                    remove: () => {
+                        if (subscription && subscription.remove) {
+                            subscription.remove();
                         }
                     }
                 };
             }
             // Fallback - return a no-op listener to prevent crashes
             return {
-                remove: function () { }
+                remove: () => { }
             };
         }
         catch (error) {
             console.error('addListener failed:', error);
             // Return a no-op listener to prevent crashes
             return {
-                remove: function () { }
+                remove: () => { }
             };
         }
-    };
-    ExpoHeadphoneDetectionModule.prototype.removeAllListeners = function (eventName) {
+    }
+    removeAllListeners(eventName) {
         try {
             if (react_native_1.Platform.OS === 'web' && this.webModule && this.webModule.removeAllListeners) {
                 this.webModule.removeAllListeners(eventName);
@@ -417,9 +324,9 @@ var ExpoHeadphoneDetectionModule = /** @class */ (function (_super) {
         catch (error) {
             console.error('removeAllListeners failed:', error);
         }
-    };
+    }
     // MARK: - Error Handling
-    ExpoHeadphoneDetectionModule.prototype.normalizeError = function (error) {
+    normalizeError(error) {
         if (error instanceof Error) {
             return error;
         }
@@ -427,8 +334,8 @@ var ExpoHeadphoneDetectionModule = /** @class */ (function (_super) {
             return new Error(error);
         }
         if (error && typeof error === 'object') {
-            var message = error.message || error.code || 'Unknown error';
-            var normalizedError = new Error(message);
+            const message = error.message || error.code || 'Unknown error';
+            const normalizedError = new Error(message);
             // Preserve additional error properties
             if (error.code) {
                 normalizedError.code = error.code;
@@ -439,9 +346,9 @@ var ExpoHeadphoneDetectionModule = /** @class */ (function (_super) {
             return normalizedError;
         }
         return new Error('Unknown error occurred');
-    };
+    }
     // MARK: - Platform Capabilities
-    ExpoHeadphoneDetectionModule.prototype.getPlatformCapabilities = function () {
+    getPlatformCapabilities() {
         return {
             supportsRealTimeDetection: true,
             supportsBluetooth: react_native_1.Platform.OS !== 'web',
@@ -451,85 +358,71 @@ var ExpoHeadphoneDetectionModule = /** @class */ (function (_super) {
             supportsCache: react_native_1.Platform.OS === 'web',
             platform: react_native_1.Platform.OS
         };
-    };
+    }
     // MARK: - Health Check
-    ExpoHeadphoneDetectionModule.prototype.performHealthCheck = function () {
-        return __awaiter(this, void 0, void 0, function () {
-            var issues, recommendations, error_8, metrics, permissionState, cacheInfo;
-            return __generator(this, function (_a) {
-                switch (_a.label) {
-                    case 0:
-                        issues = [];
-                        recommendations = [];
-                        _a.label = 1;
-                    case 1:
-                        _a.trys.push([1, 3, , 4]);
-                        // Test basic functionality
-                        return [4 /*yield*/, this.getCurrentStatus()];
-                    case 2:
-                        // Test basic functionality
-                        _a.sent();
-                        return [3 /*break*/, 4];
-                    case 3:
-                        error_8 = _a.sent();
-                        issues.push('Basic detection failed');
-                        recommendations.push('Check device permissions and module installation');
-                        return [3 /*break*/, 4];
-                    case 4:
-                        // Check circuit breaker
-                        if (this.isCircuitBreakerOpen()) {
-                            issues.push('Circuit breaker is open');
-                            recommendations.push('Reset circuit breaker or wait for automatic recovery');
-                        }
-                        return [4 /*yield*/, this.getDetectionMetrics()];
-                    case 5:
-                        metrics = _a.sent();
-                        if (metrics) {
-                            if (metrics.errorCount > 10) {
-                                issues.push('High error count detected');
-                                recommendations.push('Review device compatibility and permissions');
-                            }
-                            if (metrics.detectionLatency > 1000) {
-                                issues.push('High detection latency');
-                                recommendations.push('Consider device performance optimization');
-                            }
-                            if (metrics.accuracyScore < 0.8) {
-                                issues.push('Low detection accuracy');
-                                recommendations.push('Check device compatibility and update detection algorithms');
-                            }
-                        }
-                        // Platform-specific checks
-                        if (react_native_1.Platform.OS === 'web') {
-                            permissionState = this.getPermissionState();
-                            if (permissionState === 'denied') {
-                                issues.push('Microphone permissions denied');
-                                recommendations.push('Request user to grant microphone permissions');
-                            }
-                            cacheInfo = this.getCacheInfo();
-                            if (cacheInfo && cacheInfo.size === 0) {
-                                issues.push('Cache is empty');
-                                recommendations.push('Perform initial detection to populate cache');
-                            }
-                        }
-                        return [2 /*return*/, {
-                                isHealthy: issues.length === 0,
-                                issues: issues,
-                                recommendations: recommendations,
-                                platformInfo: {
-                                    platform: react_native_1.Platform.OS,
-                                    capabilities: this.getPlatformCapabilities(),
-                                    moduleVersion: '1.0.0',
-                                    timestamp: Date.now()
-                                }
-                            }];
+    performHealthCheck() {
+        return __awaiter(this, void 0, void 0, function* () {
+            const issues = [];
+            const recommendations = [];
+            try {
+                // Test basic functionality
+                yield this.getCurrentStatus();
+            }
+            catch (error) {
+                issues.push('Basic detection failed');
+                recommendations.push('Check device permissions and module installation');
+            }
+            // Check circuit breaker
+            if (this.isCircuitBreakerOpen()) {
+                issues.push('Circuit breaker is open');
+                recommendations.push('Reset circuit breaker or wait for automatic recovery');
+            }
+            // Check metrics
+            const metrics = yield this.getDetectionMetrics();
+            if (metrics) {
+                if (metrics.errorCount > 10) {
+                    issues.push('High error count detected');
+                    recommendations.push('Review device compatibility and permissions');
                 }
-            });
+                if (metrics.detectionLatency > 1000) {
+                    issues.push('High detection latency');
+                    recommendations.push('Consider device performance optimization');
+                }
+                if (metrics.accuracyScore < 0.8) {
+                    issues.push('Low detection accuracy');
+                    recommendations.push('Check device compatibility and update detection algorithms');
+                }
+            }
+            // Platform-specific checks
+            if (react_native_1.Platform.OS === 'web') {
+                const permissionState = this.getPermissionState();
+                if (permissionState === 'denied') {
+                    issues.push('Microphone permissions denied');
+                    recommendations.push('Request user to grant microphone permissions');
+                }
+                const cacheInfo = this.getCacheInfo();
+                if (cacheInfo && cacheInfo.size === 0) {
+                    issues.push('Cache is empty');
+                    recommendations.push('Perform initial detection to populate cache');
+                }
+            }
+            return {
+                isHealthy: issues.length === 0,
+                issues,
+                recommendations,
+                platformInfo: {
+                    platform: react_native_1.Platform.OS,
+                    capabilities: this.getPlatformCapabilities(),
+                    moduleVersion: '1.0.0',
+                    timestamp: Date.now()
+                }
+            };
         });
-    };
+    }
     // MARK: - Debug Information
-    ExpoHeadphoneDetectionModule.prototype.getDebugInfo = function () {
-        var moduleLoaded = false;
-        var lastError = null;
+    getDebugInfo() {
+        let moduleLoaded = false;
+        let lastError = null;
         try {
             if (react_native_1.Platform.OS === 'web') {
                 moduleLoaded = this.isWebModuleLoaded && !!this.webModule;
@@ -543,49 +436,44 @@ var ExpoHeadphoneDetectionModule = /** @class */ (function (_super) {
         }
         return {
             platform: react_native_1.Platform.OS,
-            moduleLoaded: moduleLoaded,
+            moduleLoaded,
             capabilities: this.getPlatformCapabilities(),
-            lastError: lastError,
+            lastError,
             timestamp: Date.now()
         };
-    };
-    return ExpoHeadphoneDetectionModule;
-}(expo_modules_core_1.EventEmitter));
+    }
+}
 // MARK: - Singleton Export
-var ExpoHeadphoneDetectionModuleInstance = new ExpoHeadphoneDetectionModule();
+const ExpoHeadphoneDetectionModuleInstance = new ExpoHeadphoneDetectionModule();
 // Ensure proper cleanup on app termination
 if (react_native_1.Platform.OS !== 'web') {
-    var AppState = require('react-native').AppState;
-    var appStateSubscription = null;
-    var handleAppStateChange = function (nextAppState) {
+    const AppState = require('react-native').AppState;
+    let appStateSubscription = null;
+    const handleAppStateChange = (nextAppState) => {
         if (nextAppState === 'background' || nextAppState === 'inactive') {
             // App is going to background, stop listening to save battery
-            ExpoHeadphoneDetectionModuleInstance.stopListening().catch(function () { });
+            ExpoHeadphoneDetectionModuleInstance.stopListening().catch(() => { });
         }
         else if (nextAppState === 'active') {
             // App is coming to foreground, restart listening
-            ExpoHeadphoneDetectionModuleInstance.startListening().catch(function () { });
+            ExpoHeadphoneDetectionModuleInstance.startListening().catch(() => { });
         }
     };
     // Set up app state listener
     appStateSubscription = AppState.addEventListener('change', handleAppStateChange);
     // Cleanup function for development
     if (__DEV__) {
-        var originalConsoleError_1 = console.error;
-        console.error = function () {
-            var args = [];
-            for (var _i = 0; _i < arguments.length; _i++) {
-                args[_i] = arguments[_i];
-            }
+        const originalConsoleError = console.error;
+        console.error = (...args) => {
             if (args[0] && args[0].includes('ExpoHeadphoneDetection')) {
                 // Enhanced error logging for development
                 console.group('🎧 Headphone Detection Error');
-                originalConsoleError_1.apply(void 0, args);
+                originalConsoleError(...args);
                 console.log('Debug Info:', ExpoHeadphoneDetectionModuleInstance.getDebugInfo());
                 console.groupEnd();
             }
             else {
-                originalConsoleError_1.apply(void 0, args);
+                originalConsoleError(...args);
             }
         };
     }
